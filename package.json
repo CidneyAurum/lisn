@@ -1,0 +1,40 @@
+{
+  "name": "lisn",
+  "productName": "LISN",
+  "version": "0.1.0",
+  "description": "聆 LISN — 你的音乐，由此展开 · GitHub 免费音源聚合播放/下载",
+  "main": "out/main/index.js",
+  "author": "glass-music",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "smoke:sources": "node scripts/smoke-sources.mjs",
+    "dist": "electron-vite build && electron-builder --win portable zip"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.2.0",
+    "electron-builder": "25.1.8",
+    "electron-vite": "^2.3.0",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.462.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "zustand": "^4.5.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "node-id3": "^0.2.9"
+  }
+}

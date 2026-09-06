@@ -1,0 +1,17 @@
+appId: com.lisn.player
+productName: LISN
+copyright: 仅供个人学习试听
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: portable
+    - target: zip
+  artifactName: ${productName}-${version}-${arch}.${ext}
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/

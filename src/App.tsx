@@ -78,6 +78,25 @@ export function App(): JSX.Element {
     navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
   }, [playing])
 
+  // 键盘控制:空格 播放/暂停,←/→ 快退/快进 5s(输入框聚焦时忽略)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const audio = getAudio()
+      if (e.code === 'Space') {
+        e.preventDefault()
+        audio.paused ? void audio.play().catch(() => {}) : audio.pause()
+      } else if (e.code === 'ArrowLeft') {
+        audio.currentTime = Math.max(0, audio.currentTime - 5)
+      } else if (e.code === 'ArrowRight') {
+        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <>
       <div className="aurora">

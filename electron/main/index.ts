@@ -21,7 +21,6 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 let tray: Tray | null = null
-let quitting = false
 
 // lx 沙箱内脚本的异步网络失败（如 ikun 启动自检）可能产生未处理 rejection——只记日志，不影响应用
 process.on('unhandledRejection', (reason) => {

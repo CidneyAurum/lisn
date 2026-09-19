@@ -41,6 +41,14 @@ function loadBounds(): { width: number; height: number; x?: number; y?: number }
   return { width: 1440, height: 920 }
 }
 
+/** 诊断日志:写入 userData/lisn.log,便于排查播放中断等现场问题 */
+export function diagLog(line: string): void {
+  try {
+    const f = path.join(app.getPath('userData'), 'lisn.log')
+    fs.appendFileSync(f, new Date().toISOString() + ' ' + line + '\n')
+  } catch { /* ignore */ }
+}
+
 function createWindow(): void {
   const bounds = loadBounds()
   win = new BrowserWindow({
@@ -63,6 +71,7 @@ function createWindow(): void {
   win.once('ready-to-show', () => win?.show())
   // 渲染进程崩溃(含 OOM/GPU 异常)自动重载,避免留下黑窗
   win.webContents.on('render-process-gone', (_e, details) => {
+    diagLog('[crash] render-process-gone reason=' + details.reason + ' exit=' + details.exitCode)
     console.error('[render-process-gone]', details.reason, details.exitCode)
     setTimeout(() => { try { win?.webContents.reload() } catch { /* ignore */ } }, 500)
   })
@@ -122,6 +131,7 @@ app.whenReady().then(async () => {
   const settings = new SettingsStore(path.join(userData, 'settings.json'), path.join(app.getPath('music'), 'GlassMusic'))
   const mediaServer = new MediaServer()
   await mediaServer.start()
+  diagLog('[media] proxy port=' + mediaServer.port)
 
   const lx = new LxSourceManager(sourcesDir)
   await lx.init()
@@ -129,6 +139,17 @@ app.whenReady().then(async () => {
   await mf.init()
   const registry = new SourceRegistry(lx, mf)
   registry.mode = settings.get().mode
+  // 流代理:上游反复失败时自动重新解析换源
+  mediaServer.freshUrlProvider = async (songJson, quality, pinned) => {
+    try {
+      const r = await registry.resolveUrl(JSON.parse(songJson), quality, { pinnedProviderId: pinned ?? undefined })
+      diagLog('[media] freshUrl for retry ok')
+      return r.url
+    } catch (e) {
+      diagLog('[media] freshUrl failed: ' + String(e).slice(0, 80))
+      return null
+    }
+  }
 
   const broadcast = (channel: string, payload: any) => win?.webContents.send(channel, payload)
   const downloads = new DownloadManager(registry, settings, broadcast)
@@ -153,6 +174,7 @@ app.whenReady().then(async () => {
     settings.patch({ limbus: cfg as any })
     if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('limbus:config', cfg)
   })
+  ipcMain.on('diag:log', (_e, msg: string) => diagLog('[renderer] ' + String(msg).slice(0, 400)))
   ipcMain.on('overlay:ready', () => {
     win?.webContents.send('overlay:repush')
     if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('limbus:config', settings.get().limbus)

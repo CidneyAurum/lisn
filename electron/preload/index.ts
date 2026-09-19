@@ -99,6 +99,7 @@ const api = {
     ipcRenderer.on('limbus:state', l)
     return () => ipcRenderer.removeListener('limbus:state', l)
   },
+  diag: (msg: string) => ipcRenderer.send('diag:log', msg),
   overlayPushLyrics: (data: unknown) => ipcRenderer.send('overlay:lyrics', data),
   overlayPushPos: (sec: number) => ipcRenderer.send('overlay:pos', sec),
   overlaySetPos: (pos: string) => ipcRenderer.send('limbus:setPos', pos),

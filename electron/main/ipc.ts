@@ -65,7 +65,14 @@ export function registerIpc(deps: IpcDeps): void {
     registry.search(String(keyword ?? '').trim(), Math.max(1, Number(page) || 1)))
   ipcMain.handle('media:resolve', async (_e, payload: { song: Song; quality: string; pinnedProviderId?: string | null }) => {
     const res = await registry.resolveUrl(payload.song, payload.quality, { pinnedProviderId: payload.pinnedProviderId })
-    return { ...res, streamUrl: mediaServer.streamUrlFor(res.url) }
+    return {
+      ...res,
+      streamUrl: mediaServer.streamUrlFor(res.url, {
+        songJson: JSON.stringify(payload.song),
+        quality: payload.quality,
+        pinned: payload.pinnedProviderId ?? null
+      })
+    }
   })
   ipcMain.handle('media:pic', (_e, song: Song) => registry.getPic(song))
   ipcMain.handle('media:lyric', (_e, song: Song) => registry.getLyric(song))

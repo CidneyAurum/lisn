@@ -327,15 +327,25 @@ let recoverBusy = false
 let intentionalLoadUntil = 0
 let lastPosSec = 0
 let stallStart = 0
+let lastPosChangeAt = 0
 let stableTimer: ReturnType<typeof setTimeout> | null = null
 
 export function markIntentionalLoad(): void {
   intentionalLoadUntil = Date.now() + 4000
 }
 
+/** 诊断上报:写入 userData/lisn.log(排查播放中断现场) */
+function diag(msg: string): void {
+  try { (window as any).glass?.diag?.('[audio] ' + msg) } catch { /* ignore */ }
+}
+
 ;(() => {
   const a = getAudio()
-  a.addEventListener('timeupdate', () => { lastPosSec = a.currentTime; stallStart = 0 })
+  a.addEventListener('timeupdate', () => {
+    if (a.currentTime !== lastPosSec) lastPosChangeAt = Date.now()
+    lastPosSec = a.currentTime
+    stallStart = 0
+  })
   const recover = async (reason: string): Promise<void> => {
     const st = useStore.getState()
     if (!st.current || !st.playing) return            // 非主动播放(换歌/暂停/初始失败)不干预
@@ -354,6 +364,7 @@ export function markIntentionalLoad(): void {
     try {
       const res = await window.glass.resolve(st.current, st.quality, st.pinnedSourceId)
       console.log('[自愈] 重解析成功,载入流', res.streamUrl?.slice(0, 60))
+      diag('recover#' + recoverAttempt + ' reason=' + reason + ' -> newUrl host=' + String(res.streamUrl).slice(0, 80))
       const audio = getAudio()
       markIntentionalLoad()
       audio.src = res.streamUrl
@@ -365,24 +376,44 @@ export function markIntentionalLoad(): void {
       try { audio.currentTime = resumeAt; console.log('[自愈] seek 到', resumeAt) } catch (e) { console.log('[自愈] seek 失败', String(e).slice(0, 80)) }
       await audio.play()
       console.log('[自愈] 恢复播放成功')
+      diag('recover#' + recoverAttempt + ' OK resumed at ' + audio.currentTime.toFixed(1))
       useStore.setState({ playing: true, loading: false, streamUrl: res.streamUrl, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
       if (stableTimer) clearTimeout(stableTimer)
       stableTimer = setTimeout(() => { recoverAttempt = 0 }, 30000) // 稳定播 30s 后重置计数
     } catch (e) {
       console.log('[自愈] 恢复失败:', String(e).slice(0, 120))
+      diag('recover#' + recoverAttempt + ' FAIL ' + String(e).slice(0, 120))
       setTimeout(() => { recoverBusy = false; void recover(reason + '+') }, 2000)
       return
     }
     recoverBusy = false
   }
-  a.addEventListener('error', () => { if (a.src) void recover('error' + (a.error?.code ?? '')) })
+  a.addEventListener('waiting', () => diag('waiting pos=' + a.currentTime.toFixed(1) + ' ready=' + a.readyState))
+  a.addEventListener('playing', () => diag('playing pos=' + a.currentTime.toFixed(1)))
+  a.addEventListener('ended', () => diag('ended'))
+  a.addEventListener('emptied', () => diag('emptied'))
+  a.addEventListener('error', () => {
+    const st = useStore.getState()
+    diag('ERROR code=' + (a.error?.code ?? '?') + ' msg=' + (a.error?.message ?? '') + ' pos=' + a.currentTime.toFixed(1) +
+      ' ready=' + a.readyState + ' net=' + a.networkState + ' playing=' + st.playing + ' song=' + (st.current?.name ?? '-'))
+    if (a.src) void recover('error' + (a.error?.code ?? ''))
+  })
   a.addEventListener('abort', () => {
     if (Date.now() < intentionalLoadUntil) return
     const st = useStore.getState()
     if (st.current && st.playing) void recover('abort')
   })
   a.addEventListener('stalled', () => { stallStart = Date.now() })
+  // 位置看门狗:播放中位置超过 8s 不前进(流挂起/无事件静默冻结)即判定卡死并自愈
   setInterval(() => {
     if (stallStart && Date.now() - stallStart > 10000) { stallStart = 0; void recover('stalled') }
+    const st = useStore.getState()
+    if (!st.playing || st.loading) return
+    if (a.paused) return
+    if (lastPosChangeAt && Date.now() - lastPosChangeAt > 8000) {
+      lastPosChangeAt = Date.now() // 防重复触发
+      diag('WATCHDOG 位置停滞 >8s pos=' + a.currentTime.toFixed(1) + ' ready=' + a.readyState + ' net=' + a.networkState)
+      void recover('watchdog')
+    }
   }, 3000)
 })()

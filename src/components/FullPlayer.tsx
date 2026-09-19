@@ -179,7 +179,7 @@ export function FullPlayer(): JSX.Element {
             {playMode === 'one' ? <Repeat1 size={20} /> : playMode === 'shuffle' ? <Shuffle size={20} /> : <Repeat size={20} />}
           </button>
           <button className="fp-btn" onClick={playPrev} title="上一首"><SkipBack size={26} /></button>
-          <button className="fp-play" onClick={() => { if (loading) return; playing ? audio.pause() : audio.play() }}>
+          <button className="fp-play" onClick={() => { if (loading) return; void useStore.getState().togglePlay() }}>
             {loading ? <Loader2 size={26} className="spin" /> : playing ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" />}
           </button>
           <button className="fp-btn" onClick={playNext} title="下一首"><SkipForward size={26} /></button>

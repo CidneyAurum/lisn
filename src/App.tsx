@@ -37,7 +37,7 @@ export function App(): JSX.Element {
     const offTray = window.glass.onTrayControl(action => {
       const audio = getAudio()
       const st = useStore.getState()
-      if (action === 'toggle') audio.paused ? void audio.play().catch(() => {}) : audio.pause()
+      if (action === 'toggle') void useStore.getState().togglePlay()
       else if (action === 'next') st.playNext()
       else if (action === 'prev') st.playPrev()
     })
@@ -66,7 +66,7 @@ export function App(): JSX.Element {
     if (!('mediaSession' in navigator)) return
     const audio = getAudio()
     const ms = navigator.mediaSession
-    ms.setActionHandler('play', () => { void audio.play().catch(() => {}) })
+    ms.setActionHandler('play', () => { void useStore.getState().togglePlay() })
     ms.setActionHandler('pause', () => audio.pause())
     ms.setActionHandler('previoustrack', () => useStore.getState().playPrev())
     ms.setActionHandler('nexttrack', () => useStore.getState().playNext())

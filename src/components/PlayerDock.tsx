@@ -151,7 +151,7 @@ export function PlayerDock(): JSX.Element | null {
             if (loading) return
             const st = useStore.getState()
             if (!playing && !audio.src && st.current) { void st.play(st.current, st.queue); return }
-            playing ? audio.pause() : audio.play()
+            void useStore.getState().togglePlay()
           }}>
             {loading ? <Loader2 size={19} className="spin" /> : playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
           </button>

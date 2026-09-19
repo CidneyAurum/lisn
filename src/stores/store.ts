@@ -61,6 +61,7 @@ interface AppState extends PlayerState {
   sleepTimerAt: number | null
   setSleepTimer: (minutes: number) => void
   setPlaying: (p: boolean) => void
+  togglePlay: () => Promise<void>
   setQuality: (q: '128k' | '320k' | 'flac') => void
   setPinnedSource: (id: string | null) => void
   clearManualBlocked: () => void
@@ -187,6 +188,7 @@ export const useStore = create<AppState>((set, get) => ({
       const res = await window.glass.resolve(song, st.quality, st.pinnedSourceId)
       const audio = getAudio()
       audio.loop = st.playMode === 'one'
+      markIntentionalLoad()
       audio.src = res.streamUrl
       await audio.play()
       set({ streamUrl: res.streamUrl, playing: true, loading: false, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
@@ -250,6 +252,36 @@ export const useStore = create<AppState>((set, get) => ({
     if (s) { const nextSettings = { ...s, playMode: next }; set({ settings: nextSettings }); void window.glass.patchSettings({ playMode: next }) }
   },
   setPlaying: (p) => set({ playing: p }),
+  togglePlay: async () => {
+    const audio = getAudio()
+    if (!audio.paused) { audio.pause(); return }
+    try {
+      await audio.play()
+    } catch {
+      // 流已过期/失效(免费源链接有时效):重新解析并断点续播
+      const st = get()
+      if (!st.current) return
+      const resumeAt = Math.max(0, audio.currentTime)
+      get().showToast('播放流已失效,正在重新解析…')
+      try {
+        const res = await window.glass.resolve(st.current, st.quality, st.pinnedSourceId)
+        markIntentionalLoad()
+        audio.src = res.streamUrl
+        await new Promise<void>(r => {
+          const f = () => { audio.removeEventListener('loadedmetadata', f); r() }
+          audio.addEventListener('loadedmetadata', f)
+          setTimeout(r, 4000)
+        })
+        try { if (resumeAt > 1) audio.currentTime = resumeAt } catch { /* 流不支持 seek */ }
+        await audio.play()
+        set({ playing: true, streamUrl: res.streamUrl, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
+        get().showToast('已恢复播放')
+      } catch {
+        set({ playing: false, error: '恢复播放失败' })
+        get().showToast('恢复播放失败,请尝试切下一首')
+      }
+    }
+  },
   setQuality: (q) => {
     set({ quality: q })
     const cur = get().current
@@ -286,4 +318,71 @@ useStore.subscribe((s, p) => {
 
 // 调试/E2E:CDP 可通过 window.__store 驱动与检查应用状态(本地应用,常驻无害)
 ;(window as any).__store = useStore
-;(window as any).__audio = getAudio
+;(window as any).__audio = getAudio()
+;(window as any).__getAudio = getAudio
+
+// ---- 播放中断自愈:设备切换/流断开/其它应用抢占后,原地重解析并断点续播 ----
+let recoverAttempt = 0
+let recoverBusy = false
+let intentionalLoadUntil = 0
+let lastPosSec = 0
+let stallStart = 0
+let stableTimer: ReturnType<typeof setTimeout> | null = null
+
+export function markIntentionalLoad(): void {
+  intentionalLoadUntil = Date.now() + 4000
+}
+
+;(() => {
+  const a = getAudio()
+  a.addEventListener('timeupdate', () => { lastPosSec = a.currentTime; stallStart = 0 })
+  const recover = async (reason: string): Promise<void> => {
+    const st = useStore.getState()
+    if (!st.current || !st.playing) return            // 非主动播放(换歌/暂停/初始失败)不干预
+    if (Date.now() < intentionalLoadUntil) return     // 主动换源引起的瞬态事件
+    if (recoverBusy) return
+    if (recoverAttempt >= 3) {
+      recoverAttempt = 0
+      useStore.getState().showToast('连续中断,已自动切换下一首')
+      useStore.getState().playNext()
+      return
+    }
+    recoverBusy = true
+    recoverAttempt++
+    const resumeAt = Math.max(0, lastPosSec - 1)
+    useStore.getState().showToast(`播放被打断,正在恢复(${recoverAttempt}/3)…`)
+    try {
+      const res = await window.glass.resolve(st.current, st.quality, st.pinnedSourceId)
+      console.log('[自愈] 重解析成功,载入流', res.streamUrl?.slice(0, 60))
+      const audio = getAudio()
+      markIntentionalLoad()
+      audio.src = res.streamUrl
+      await new Promise<void>(resolve => {
+        const onMeta = () => { console.log('[自愈] metadata 就绪'); audio.removeEventListener('loadedmetadata', onMeta); resolve() }
+        audio.addEventListener('loadedmetadata', onMeta)
+        setTimeout(() => { console.log('[自愈] metadata 超时,继续'); resolve() }, 4000)
+      })
+      try { audio.currentTime = resumeAt; console.log('[自愈] seek 到', resumeAt) } catch (e) { console.log('[自愈] seek 失败', String(e).slice(0, 80)) }
+      await audio.play()
+      console.log('[自愈] 恢复播放成功')
+      useStore.setState({ playing: true, loading: false, streamUrl: res.streamUrl, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
+      if (stableTimer) clearTimeout(stableTimer)
+      stableTimer = setTimeout(() => { recoverAttempt = 0 }, 30000) // 稳定播 30s 后重置计数
+    } catch (e) {
+      console.log('[自愈] 恢复失败:', String(e).slice(0, 120))
+      setTimeout(() => { recoverBusy = false; void recover(reason + '+') }, 2000)
+      return
+    }
+    recoverBusy = false
+  }
+  a.addEventListener('error', () => { if (a.src) void recover('error' + (a.error?.code ?? '')) })
+  a.addEventListener('abort', () => {
+    if (Date.now() < intentionalLoadUntil) return
+    const st = useStore.getState()
+    if (st.current && st.playing) void recover('abort')
+  })
+  a.addEventListener('stalled', () => { stallStart = Date.now() })
+  setInterval(() => {
+    if (stallStart && Date.now() - stallStart > 10000) { stallStart = 0; void recover('stalled') }
+  }, 3000)
+})()

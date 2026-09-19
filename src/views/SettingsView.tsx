@@ -35,6 +35,16 @@ export function SettingsView(): JSX.Element {
       <div className="song-list">
         <div className="setting-row">
           <div>
+            <div className="setting-label">关于</div>
+            <div className="setting-desc">聆 LISN v{__APP_VERSION__} · 聚合音源播放器 · 仅供个人学习试听</div>
+            <div className="setting-desc" style={{ marginTop: 6 }}>
+              GitHub: github.com/CidneyAurum/lisn · 📱 安卓版: lisn-mobile
+            </div>
+          </div>
+        </div>
+
+        <div className="setting-row">
+          <div>
             <div className="setting-label">下载目录</div>
             <div className="setting-desc">MP3/FLAC 与歌词 .lrc 的保存位置</div>
           </div>

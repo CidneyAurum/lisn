@@ -965,3 +965,18 @@ input, select { font-family: inherit; }
 .full-player .fp-play:hover { transform: scale(1.05); }
 .full-player .fp-vol { display: flex; align-items: center; gap: 8px; position: absolute; right: 60px; }
 .full-player .fp-btns { position: relative; }
+
+/* ============ Limbus 演出模式 ============ */
+.fp-limbus-btn {
+  margin-left: 12px; padding: 3px 10px; font-size: 11px; letter-spacing: 2px;
+  background: transparent; border: 1px solid var(--stroke);
+  border-radius: 999px; color: var(--text-2); cursor: pointer;
+  transition: all var(--t-fast);
+}
+.fp-limbus-btn:hover { color: var(--d8a523, #d8a523); border-color: #d8a523; }
+.fp-limbus-btn.on { color: #d8a523; border-color: #d8a523; background: rgba(216,165,35,.12); }
+.fp-limbus {
+  flex: 1; min-height: 0; overflow: hidden; margin-top: 14px;
+  border-radius: var(--r-md); position: relative;
+  background: radial-gradient(ellipse at center, rgba(13,13,13,.35), rgba(13,13,13,.75));
+}

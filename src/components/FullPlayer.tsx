@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Play, Pause, SkipBack, SkipForward, X, Volume2, Repeat, Repeat1, Shuffle, Loader2 } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { parseLrc, currentIndex, type LrcLine } from '../utils/lrc'
+import { LimbusPerformance } from './LimbusPerformance'
 import { motion } from 'framer-motion'
 
 const fmt = (sec: number) => {
@@ -43,6 +44,7 @@ export function FullPlayer(): JSX.Element {
   }, [audio])
 
   const [lrc, setLrc] = useState<LrcLine[]>([])
+  const [showLimbus, setShowLimbus] = useState(false)
   useEffect(() => {
     let alive = true
     setLrc([])
@@ -60,7 +62,10 @@ export function FullPlayer(): JSX.Element {
   }, [curIdx])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullPlayer(false) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullPlayer(false)
+      if (e.key === 'l' || e.key === 'L') setShowLimbus(v => !v)
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [setFullPlayer])
@@ -94,7 +99,16 @@ export function FullPlayer(): JSX.Element {
         </div>
         <div className="fp-right">
           <div className="fp-title">{current?.name ?? ''}</div>
-          <div className="fp-artist">{current?.artist ?? ''}{current?.album ? ' · ' + current.album : ''}</div>
+          <div className="fp-artist">
+            {current?.artist ?? ''}{current?.album ? ' · ' + current.album : ''}
+            <button
+              className={'fp-limbus-btn' + (showLimbus ? ' on' : '')}
+              onClick={() => setShowLimbus(v => !v)}
+              title="Limbus 演出模式 (L)"
+            >
+              演出
+            </button>
+          </div>
           <div
             className="fp-quality"
             style={{ cursor: 'pointer' }}
@@ -111,14 +125,24 @@ export function FullPlayer(): JSX.Element {
           >
             {quality.toUpperCase()} · {playMode === 'loop' ? '列表循环' : playMode === 'shuffle' ? '随机' : '单曲循环'}
           </div>
-          <div className="fp-lyrics" ref={listRef}>
-            {lrc.length ? lrc.map((line, i) => (
-              <div key={i} className={'lrc-line' + (i === curIdx ? ' on' : '')}
-                onClick={() => { audio.currentTime = line.timeMs / 1000 }}>
-                {line.text || '···'}
-              </div>
-            )) : <div className="fp-nolrc">暂无歌词,播放中可尝试切歌获取</div>}
-          </div>
+          {showLimbus && lrc.length > 0 ? (
+            <div className="fp-limbus">
+              <LimbusPerformance
+                lines={lrc}
+                getPositionSec={() => audio.currentTime}
+                onSeek={ms => { audio.currentTime = ms / 1000 }}
+              />
+            </div>
+          ) : (
+            <div className="fp-lyrics" ref={listRef}>
+              {lrc.length ? lrc.map((line, i) => (
+                <div key={i} className={'lrc-line' + (i === curIdx ? ' on' : '')}
+                  onClick={() => { audio.currentTime = line.timeMs / 1000 }}>
+                  {line.text || '···'}
+                </div>
+              )) : <div className="fp-nolrc">暂无歌词,播放中可尝试切歌获取</div>}
+            </div>
+          )}
         </div>
       </div>
 

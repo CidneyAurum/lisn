@@ -95,11 +95,11 @@ export const useStore = create<AppState>((set, get) => ({
   library: null,
   playlist: null,
   playlists: [],
-  queue: [],
-  queueIdx: -1,
+  queue: (() => { try { return JSON.parse(localStorage.getItem('lisn-lastplay') || 'null')?.queue ?? [] } catch { return [] } })(),
+  queueIdx: (() => { try { return JSON.parse(localStorage.getItem('lisn-lastplay') || 'null')?.queueIdx ?? -1 } catch { return -1 } })(),
   toast: null,
 
-  current: null,
+  current: (() => { try { return JSON.parse(localStorage.getItem('lisn-lastplay') || 'null')?.current ?? null } catch { return null } })(),
   streamUrl: null,
   playing: false,
   loading: false,
@@ -257,6 +257,13 @@ export const useStore = create<AppState>((set, get) => ({
     setTimeout(() => { if (get().toast?.id === id) set({ toast: null }) }, 3200)
   }
 }))
+
+// 队列持久化:重启后保留队列与当前曲(streamUrl 不持久,点播放自动重新解析)
+useStore.subscribe((s, p) => {
+  if (s.current && (s.current !== p.current || s.queueIdx !== p.queueIdx)) {
+    try { localStorage.setItem('lisn-lastplay', JSON.stringify({ queue: s.queue.slice(0, 300), queueIdx: s.queueIdx, current: s.current })) } catch { /* 配额 */ }
+  }
+})
 
 // 开发/测试:CDP 可通过 window.__store 驱动与检查应用状态
 if (import.meta.env.DEV) {

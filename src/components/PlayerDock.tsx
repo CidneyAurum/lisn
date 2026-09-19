@@ -125,7 +125,12 @@ export function PlayerDock(): JSX.Element | null {
             {playMode === 'one' ? <Repeat1 size={17} /> : playMode === 'shuffle' ? <Shuffle size={17} /> : <Repeat size={17} />}
           </button>
           <button className="ctrl-btn" onClick={playPrev} title="上一首"><SkipBack size={19} /></button>
-          <button className="play-btn" onClick={() => { if (loading) return; playing ? audio.pause() : audio.play() }}>
+          <button className="play-btn" onClick={() => {
+            if (loading) return
+            const st = useStore.getState()
+            if (!playing && !audio.src && st.current) { void st.play(st.current, st.queue); return }
+            playing ? audio.pause() : audio.play()
+          }}>
             {loading ? <Loader2 size={19} className="spin" /> : playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
           </button>
           <button className="ctrl-btn" onClick={playNext} title="下一首"><SkipForward size={19} /></button>

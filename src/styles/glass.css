@@ -1018,3 +1018,74 @@ html.overlay-mode, html.overlay-mode body { background: transparent !important; 
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ============ 居中模态对话框(加入歌单等) ============ */
+.dlg-mask {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(3, 8, 10, 0.62);
+  backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+}
+.dlg {
+  width: 420px; max-width: calc(100vw - 48px);
+  max-height: min(76vh, 620px);
+  display: flex; flex-direction: column;
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, rgba(20, 30, 32, 0.96), rgba(12, 18, 20, 0.98));
+  border: 1px solid var(--stroke-bright);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.dlg-head {
+  position: relative;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--stroke);
+}
+.dlg-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+.dlg-sub { font-size: 12px; color: var(--text-2); margin-top: 5px; padding-right: 30px; }
+.dlg-close {
+  position: absolute; top: 16px; right: 16px;
+  width: 28px; height: 28px; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--glass-card); border: 1px solid var(--stroke);
+  color: var(--text-2); cursor: pointer; transition: var(--t-fast);
+}
+.dlg-close:hover { color: var(--text-1); background: var(--glass-card-hover); }
+.dlg-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.dlg-item {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 9px 10px; border-radius: var(--r-sm);
+  background: transparent; border: 1px solid transparent;
+  cursor: pointer; text-align: left; transition: var(--t-fast);
+}
+.dlg-item:hover { background: var(--glass-card); border-color: var(--stroke); }
+.dlg-item.done { background: rgba(57, 197, 187, 0.1); border-color: rgba(57, 197, 187, 0.3); }
+.dlg-item-cover {
+  width: 46px; height: 46px; border-radius: 11px; overflow: hidden; flex-shrink: 0;
+  background: var(--glass-card); display: grid; place-items: center;
+}
+.dlg-item-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dlg-mosaic { width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.dlg-item-ph { color: var(--accent); }
+.dlg-item-main { flex: 1; min-width: 0; }
+.dlg-item-name { font-size: 14px; font-weight: 600; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg-item-meta { font-size: 11.5px; color: var(--text-3); margin-top: 3px; }
+.dlg-item-act {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-size: 12px; color: var(--accent); font-weight: 600;
+}
+.dlg-item.done .dlg-item-act { color: #56d9cf; }
+.dlg-empty { padding: 26px 14px; text-align: center; color: var(--text-3); font-size: 13px; }
+.dlg-foot {
+  display: flex; gap: 10px; align-items: center;
+  padding: 14px 18px 16px; border-top: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.16);
+}
+.dlg-input {
+  flex: 1; min-width: 0;
+  padding: 9px 13px; border-radius: var(--r-sm);
+  background: var(--glass-card); border: 1px solid var(--stroke);
+  color: var(--text-1); font-size: 13px; outline: none; transition: var(--t-fast);
+}
+.dlg-input:focus { border-color: var(--accent); background: var(--glass-card-hover); }
+.dlg-input::placeholder { color: var(--text-3); }

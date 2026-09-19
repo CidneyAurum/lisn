@@ -1,10 +1,10 @@
-import { Play, Download, Music4, Plus, Check } from 'lucide-react'
-import { useState } from 'react'
+import { Play, Download, Music4, Plus, Check, X, ListMusic } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { Song } from '../types'
 import { useStore } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 
-/** 加入歌单弹层：列出全部自建歌单 + 新建 */
+/** 加入歌单对话框:居中模态 + 遮罩,列表带封面缩略图,支持新建并加入 */
 export function AddToPlaylistDialog({ song, onClose }: { song: Song; onClose: () => void }): JSX.Element {
   const playlists = useStore(s => s.playlists)
   const showToast = useStore(s => s.showToast)
@@ -13,10 +13,17 @@ export function AddToPlaylistDialog({ song, onClose }: { song: Song; onClose: ()
   const [added, setAdded] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
 
+  // Esc 关闭
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const add = async (id: string, name: string) => {
     const r = await window.glass.plAddSong(id, song)
     showToast(r.detail)
-    if (r.ok) setAdded(new Set(added).add(id))
+    if (r.ok) setAdded(prev => new Set(prev).add(id))
   }
 
   const createAndAdd = async () => {
@@ -27,45 +34,63 @@ export function AddToPlaylistDialog({ song, onClose }: { song: Song; onClose: ()
       await refresh()
       const r = await window.glass.plAddSong(pl.id, song)
       showToast(r.detail)
-      if (r.ok) setAdded(new Set(added).add(pl.id))
+      if (r.ok) setAdded(prev => new Set(prev).add(pl.id))
       setNewName('')
     } finally { setBusy(false) }
   }
 
   return (
-    <motion.div
-      className="q-pop"
-      style={{ position: 'fixed', top: '38%', left: '50%', transform: 'translate(-50%,-50%)', width: 340, zIndex: 200 }}
-      initial={{ opacity: 0, scale: 0.96, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.18 }}
-      onClick={e => e.stopPropagation()}
-    >
-      <div className="q-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>把「{song.name.slice(0, 14)}{song.name.length > 14 ? '…' : ''}」加入歌单</span>
-        <button className="icon-btn" style={{ width: 24, height: 24 }} onClick={onClose}><Plus size={13} style={{ transform: 'rotate(45deg)' }} /></button>
-      </div>
-      <div style={{ maxHeight: 260, overflowY: 'auto', padding: '0 4px 4px' }}>
-        {playlists.map(p => (
-          <button key={p.id} className={'q-opt' + (added.has(p.id) ? ' on' : '')} onClick={() => void add(p.id, p.name)}>
-            <span>{p.name}</span>
-            <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{added.has(p.id) ? <Check size={12} /> : p.songs.length + ' 首'}</span>
+    <motion.div className="dlg-mask" onClick={onClose}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+      <motion.div className="dlg" onClick={e => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: 6 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}>
+        <div className="dlg-head">
+          <div className="dlg-title">加入歌单</div>
+          <div className="dlg-sub">「{song.name.length > 22 ? song.name.slice(0, 22) + '…' : song.name}」 · {song.artist}</div>
+          <button className="dlg-close" onClick={onClose} title="关闭 (Esc)"><X size={16} /></button>
+        </div>
+
+        <div className="dlg-body">
+          {playlists.length ? playlists.map(p => {
+            const done = added.has(p.id)
+            return (
+              <button key={p.id} className={'dlg-item' + (done ? ' done' : '')} onClick={() => void add(p.id, p.name)}>
+                <div className="dlg-item-cover">
+                  {p.cover
+                    ? <img src={p.cover} alt="" />
+                    : (p.songs.filter(s => s.picUrl).length >= 4)
+                      ? <div className="dlg-mosaic">{p.songs.filter(s => s.picUrl).slice(0, 4).map((s, k) => <img key={k} src={s.picUrl} alt="" />)}</div>
+                      : p.songs[0]?.picUrl
+                        ? <img src={p.songs[0].picUrl} alt="" />
+                        : <div className="dlg-item-ph"><ListMusic size={16} /></div>}
+                </div>
+                <div className="dlg-item-main">
+                  <div className="dlg-item-name">{p.name}</div>
+                  <div className="dlg-item-meta">{p.songs.length} 首{p.keyword ? ' · ' + p.keyword : ''}</div>
+                </div>
+                <div className="dlg-item-act">{done ? <><Check size={15} /> 已加入</> : <><Plus size={15} /> 加入</>}</div>
+              </button>
+            )
+          }) : (
+            <div className="dlg-empty">还没有歌单,在下方新建一个</div>
+          )}
+        </div>
+
+        <div className="dlg-foot">
+          <input
+            className="dlg-input"
+            placeholder="新建歌单名称…"
+            value={newName}
+            autoFocus
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') void createAndAdd() }}
+          />
+          <button className="mini-btn primary" disabled={!newName.trim() || busy} onClick={() => void createAndAdd()}>
+            {busy ? '创建中…' : '新建并加入'}
           </button>
-        ))}
-        {!playlists.length && <div className="muted" style={{ padding: '10px 12px', fontSize: 12 }}>还没有歌单，下面新建一个</div>}
-      </div>
-      <div className="row" style={{ padding: '8px 10px 6px', gap: 8 }}>
-        <input
-          className="path-input"
-          placeholder="新歌单名称…"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') void createAndAdd() }}
-          style={{ maxWidth: 200, height: 34 }}
-        />
-        <button className="mini-btn primary" disabled={busy} onClick={() => void createAndAdd()}>新建并加入</button>
-      </div>
+        </div>
+      </motion.div>
     </motion.div>
   )
 }

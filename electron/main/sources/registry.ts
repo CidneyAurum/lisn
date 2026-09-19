@@ -170,14 +170,46 @@ export class SourceRegistry {
   }
 
   async getLyric(song: Song): Promise<string | undefined> {
+    // 同一平台的所有 provider 依次尝试(lx 源多无歌词能力,须轮到 GD/HTTP 等)
     for (const o of song.origins) {
-      const p = this.providers.find(x => x.getLyric && x.caps.platforms.includes(o.platform as any) && x.health.status !== 'disabled')
-      if (!p?.getLyric) continue
-      try {
-        const lrc = await withTimeout(p.getLyric(o), 8000)
-        if (lrc) return lrc
-      } catch { /* next */ }
+      for (const p of this.providers) {
+        if (!p.getLyric || !p.caps.platforms.includes(o.platform as any) || p.health.status === 'disabled') continue
+        try {
+          const lrc = await withTimeout(p.getLyric(o), 8000)
+          if (lrc && this.lyricMatchesSong(lrc, song) && this.lyricHasTimeline(lrc)) return lrc
+        } catch { /* next */ }
+      }
     }
+    // 跨平台兜底:播放平台无歌词能力(tx 等)时,按「歌名+歌手」在 GD 搜同名曲取词
+    try {
+      const gd = this.providers.find(x => x.id === 'gd')
+      if (gd?.search && gd.getLyric) {
+        const hits = await withTimeout(gd.search(song.name.trim() + ' ' + song.artist.trim(), 1), 12000)
+        const hit = hits.find(h => h.name.includes(song.name.trim()))
+        const o = hit?.origins[0]
+        if (o) {
+          const lrc = await withTimeout(gd.getLyric(o), 8000)
+          if (lrc && this.lyricMatchesSong(lrc, song) && this.lyricHasTimeline(lrc)) return lrc
+        }
+      }
+    } catch { /* ignore */ }
     return undefined
+  }
+
+  /** 歌词质量门:歌名非现场版但歌词头部标注 现场/Live → 视为错版,换源 */
+  private lyricMatchesSong(raw: string, song: Song): boolean {
+    const n = song.name
+    if (/现场|演唱会|live/i.test(n)) return true
+    const head = raw.split('\n').slice(0, 6).join('\n')
+    return !/现场|演唱会|\blive\b/i.test(head)
+  }
+
+  /** 至少两条带时间戳的行,否则视为占位/空歌词 */
+  private lyricHasTimeline(raw: string): boolean {
+    let n = 0
+    for (const line of raw.split('\n')) {
+      if (/\[[0-9]{1,3}:[0-9]{1,2}/.test(line) && ++n >= 2) return true
+    }
+    return false
   }
 }

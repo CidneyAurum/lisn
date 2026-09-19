@@ -46,7 +46,8 @@ const INST_PATTERNS = [
   /\(inst\.?\)/i, /（inst\.?）/i, /\[inst\.?\]/i, /【inst\.?】/i, /\binst\.?$/i,
   /instrumental/i, /纯音乐/, /伴奏/, /off\s*vocal/i, /offvocal/i, /カラオケ/i, /karaoke/i,
 ]
-const isFilteredLine = (t: string) => CREDIT_PATTERNS.some(re => re.test(t)) || INST_PATTERNS.some(re => re.test(t))
+const isFilteredLine = (t: string) => CREDIT_PATTERNS.some(re => re.test(t)) || INST_PATTERNS.some(re => re.test(t)) ||
+  (t.length < 40 && /^[^\s:：]{1,6}[:：]/.test(t))
 // LRC 头部元数据行(「歌名 - 歌手 (Romanization)」):含歌手名且带连字符的短行
 const isMetaLine = (t: string, artist: string) =>
   artist.length >= 2 && t.length < 60 && /[-–—]/.test(t) && t.includes(artist)

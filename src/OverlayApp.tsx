@@ -88,9 +88,6 @@ export function OverlayApp(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    window.overlayControls?.setLocked(locked)
-
-  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')

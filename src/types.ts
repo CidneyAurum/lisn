@@ -168,6 +168,7 @@ export interface GlassApi {
   onQueue(cb: (items: DownloadItem[]) => void): () => void
   overlayPushLyrics(data: { lines: { timeMs: number; text: string }[]; title: string; artist: string }): void
   overlayPushPos(sec: number): void
+  overlaySetPos(pos: string): void
   onLimbusState(cb: (visible: boolean) => void): () => void
   overlaySetConfig(cfg: unknown): void
   onLimbusConfig(cb: (cfg: unknown) => void): () => void

@@ -101,6 +101,7 @@ const api = {
   },
   overlayPushLyrics: (data: unknown) => ipcRenderer.send('overlay:lyrics', data),
   overlayPushPos: (sec: number) => ipcRenderer.send('overlay:pos', sec),
+  overlaySetPos: (pos: string) => ipcRenderer.send('limbus:setPos', pos),
   onQueue: (cb: (items: unknown[]) => void) => {
     const listener = (_e: unknown, items: unknown[]) => cb(items)
     ipcRenderer.on('dl:queue', listener)

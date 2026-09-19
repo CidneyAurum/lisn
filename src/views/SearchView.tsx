@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, Sparkles, ChevronDown, Loader2, Save } from 'lucide-react'
 import { useStore } from '../stores/store'
 import { SongTable, SearchSkeleton } from '../components/SongTable'
@@ -17,8 +17,17 @@ export function SearchView(): JSX.Element {
   const loadingMore = useStore(s => s.loadingMore)
   const showToast = useStore(s => s.showToast)
   const [localKw, setLocalKw] = useState(keyword)
+  const [srcFilter, setSrcFilter] = useState('all')
 
-  useEffect(() => { setLocalKw(keyword) }, [keyword])
+  useEffect(() => { setLocalKw(keyword); setSrcFilter('all') }, [keyword])
+
+  const platforms = useMemo(() => {
+    const set = new Set<string>()
+    results.forEach(r => r.origins.forEach(o => set.add(o.platform)))
+    return Array.from(set)
+  }, [results])
+  const filtered = srcFilter === 'all' ? results : results.filter(r => r.origins.some(o => o.platform === srcFilter))
+  const PLAT_LABEL: Record<string, string> = { wy: '网易', kw: '酷我', kg: '酷狗', tx: 'Q音', mg: '咪咕' }
 
   return (
     <div>
@@ -65,7 +74,7 @@ export function SearchView(): JSX.Element {
           ) : results.length ? (
             <>
               <div className="view-sub" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span>「{keyword}」已聚合 {results.length} 条（双击行播放，支持 VIP 曲目）</span>
+                <span>「{keyword}」已聚合 {results.length} 条（双击行播放，支持 VIP 曲目）{srcFilter !== 'all' && <> · 显示 {filtered.length} 条</>}</span>
                 {results.length > 0 && (
                   <button className="mini-btn" onClick={async () => {
                     const name = window.prompt('歌单名称：', keyword + ' 精选')
@@ -77,7 +86,17 @@ export function SearchView(): JSX.Element {
                   </button>
                 )}
               </div>
-              <SongTable songs={results} />
+              {platforms.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  {['all', ...platforms].map(pf => (
+                    <button key={pf} className="chip" onClick={() => setSrcFilter(pf)}
+                      style={srcFilter === pf ? { background: 'var(--accent)', color: '#fff' } : {}}>
+                      {pf === 'all' ? '全部' : (PLAT_LABEL[pf] ?? pf)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <SongTable songs={filtered} />
               {hasMore && (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '22px 0 8px' }}>
                   <button className="mini-btn" disabled={loadingMore} onClick={() => void loadMore()} style={{ padding: '10px 28px' }}>

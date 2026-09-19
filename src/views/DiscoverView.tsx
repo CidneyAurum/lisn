@@ -179,11 +179,19 @@ export function DiscoverView(): JSX.Element {
             useStore.setState({ playlist: { kind: 'custom', id: p.id } })
           }}>
             <div className="pl-cover">
-              {p.songs[0]?.picUrl
-                ? <img src={p.songs[0].picUrl} alt="" />
-                : <div style={{ width: '100%', height: '100%', background: GRADS[i % GRADS.length], display: 'grid', placeItems: 'center' }}>
-                    <ListMusic size={26} color="rgba(255,255,255,0.9)" />
-                  </div>}
+              {p.cover
+                ? <img src={p.cover} alt="" />
+                : (p.songs.filter(s => s.picUrl).length >= 4)
+                  ? <div style={{ width: '100%', height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
+                      {p.songs.filter(s => s.picUrl).slice(0, 4).map((s, k) => (
+                        <img key={k} src={s.picUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ))}
+                    </div>
+                  : p.songs[0]?.picUrl
+                    ? <img src={p.songs[0].picUrl} alt="" />
+                    : <div style={{ width: '100%', height: '100%', background: GRADS[i % GRADS.length], display: 'grid', placeItems: 'center' }}>
+                        <ListMusic size={26} color="rgba(255,255,255,0.9)" />
+                      </div>}
               <div className="pl-grad" />
               <div className="pl-play"><Play size={16} fill="currentColor" /></div>
             </div>

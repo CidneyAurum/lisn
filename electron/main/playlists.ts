@@ -6,6 +6,7 @@ export interface UserPlaylist {
   name: string
   createdAt: number
   keyword?: string       // 若由搜索结果一键保存，记录来源关键词
+  cover?: string         // 自定义封面(dataURL,512px JPEG)
   songs: Song[]
 }
 
@@ -81,6 +82,17 @@ export class PlaylistStore {
   }
 
   /** 搜索结果一键存为歌单 */
+  /** 设置/清除自定义封面(dataURL 或 null) */
+  setCover(id: string, cover: string | null): { ok: boolean; detail: string } {
+    const list = this.load()
+    const p = list.find(x => x.id === id)
+    if (!p) return { ok: false, detail: '歌单不存在' }
+    if (cover) p.cover = cover
+    else delete p.cover
+    this.save(list)
+    return { ok: true, detail: cover ? '封面已更新' : '已恢复默认封面' }
+  }
+
   saveFromSearch(name: string, keyword: string, songs: Song[]): UserPlaylist {
     const pl = this.create(name, keyword)
     pl.songs = songs.slice(0, 50)

@@ -14,6 +14,19 @@ interface StreamCtx {
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
+/** 按上游域名给出合理 Referer(部分 CDN 校验来源) */
+function refererFor(url: string): string {
+  try {
+    const h = new URL(url).hostname
+    if (h.includes('126.net') || h.includes('163.com')) return 'https://music.163.com/'
+    if (h.includes('qq.com') || h.includes('qqmusic')) return 'https://y.qq.com/'
+    if (h.includes('kuwo')) return 'https://www.kuwo.cn/'
+    if (h.includes('kugou')) return 'https://www.kugou.com/'
+    if (h.includes('migu')) return 'https://music.migu.cn/'
+    return 'https://music.163.com/'
+  } catch { return 'https://music.163.com/' }
+}
+
 export class MediaServer {
   private server: http.Server | null = null
   port = 0
@@ -103,27 +116,59 @@ export class MediaServer {
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const headers: Record<string, string> = { 'User-Agent': UA }
+        const headers: Record<string, string> = {
+          'User-Agent': UA,
+          // 部分 CDN(网易云等)缺 Referer 会中途掐断长连接
+          Referer: refererFor(url),
+          Accept: '*/*'
+        }
         if (sent > 0) headers.Range = 'bytes=' + sent + '-'
         else if (clientRange) headers.Range = clientRange
         const upstream = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(20_000) })
         if (!upstream.ok && upstream.status !== 206) throw new Error('upstream status ' + upstream.status)
         if (!upstream.body) throw new Error('upstream no body')
+        // 内容类型校验:URL 过期时 CDN 常返回 XML/HTML 错误页,
+        // 若当音频喂给解码器会报 "PTS is not defined" 导致播放中断
+        const ctype = upstream.headers.get('content-type') ?? ''
+        if (!/audio|octet-stream|mpeg|flac|mp3|m4a|aac|ogg|wav/i.test(ctype)) {
+          try { await upstream.body.cancel() } catch { /* ignore */ }
+          throw new Error('upstream not audio: ' + ctype.slice(0, 40))
+        }
         if (!headersWritten) {
           const h: Record<string, string> = {
             'Content-Type': upstream.headers.get('content-type') ?? 'audio/mpeg',
             'Accept-Ranges': 'bytes',
             'Access-Control-Allow-Origin': '*'
           }
-          const cr = upstream.headers.get('content-range')
-          const cl = upstream.headers.get('content-length')
-          if (cr) h['Content-Range'] = cr
-          if (cl) h['Content-Length'] = cl
-          res.writeHead(upstream.status, h)
+          if (attempt === 1) {
+            // 首次请求:如实透传上游的长度/范围信息
+            const cr = upstream.headers.get('content-range')
+            const cl = upstream.headers.get('content-length')
+            if (cr) h['Content-Range'] = cr
+            if (cl) h['Content-Length'] = cl
+            res.writeHead(upstream.status, h)
+          } else {
+            // 续传重连:已发送 sent 字节,长度声明不再成立 → 分块传输(避免播放器长度错位)
+            res.writeHead(upstream.status === 206 ? 200 : upstream.status, h)
+          }
           headersWritten = true
         }
-        // 上游不支持 Range 却返回整段时,跳过已发送部分
-        let skip = sent > 0 && upstream.status === 200 ? sent : 0
+        // 续传起点校验:错位会让音频流 PTS 断裂(FFmpeg "PTS is not defined")
+        let skip = 0
+        if (sent > 0) {
+          if (upstream.status === 200) {
+            skip = sent // 上游忽略 Range 返回整段:跳过已发送字节
+          } else {
+            const cr = upstream.headers.get('content-range') ?? ''
+            const m = cr.match(/bytes\s+(\d+)-/)
+            const start = m ? parseInt(m[1], 10) : null
+            if (start === null || start !== sent) {
+              // 起点不可信:断流交给播放器自愈(断点续播),避免错位损坏时间轴
+              try { await upstream.body.cancel() } catch { /* ignore */ }
+              throw new Error('range mismatch: got ' + (start ?? 'none') + ' want ' + sent)
+            }
+          }
+        }
         const reader = (upstream.body as ReadableStream<Uint8Array>).getReader()
         for (;;) {
           const stalled = Symbol('stalled')

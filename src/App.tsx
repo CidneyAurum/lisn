@@ -94,9 +94,9 @@ export function App(): JSX.Element {
     const pushLyrics = () => {
       if (!current) return
       window.glass.lyric(current).then(raw => {
-        if (!raw) return
+        // 无歌词也推送空集:清掉悬浮窗里上一首的残留歌词
         window.glass.overlayPushLyrics({
-          lines: parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })),
+          lines: raw ? parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })) : [],
           title: current.name, artist: current.artist
         })
         window.glass.overlayPushPos(getAudio().currentTime)
@@ -169,14 +169,9 @@ export function App(): JSX.Element {
           <Sidebar />
           <div className="main">
             <div className="view-scroll">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={view}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
-                >
+              {/* 视图容器:用 CSS 入场动画替代 framer-motion 的 mode="wait"
+                  (后者依赖退出动画完成回调,窗口失焦/后台 rAF 节流时会卡住导致新视图不挂载=黑屏) */}
+              <div key={view} className="view-enter">
                   {view === 'discover' && <DiscoverView />}
                   {view === 'playlist' && <PlaylistView />}
                   {view === 'search' && <SearchView />}
@@ -184,8 +179,7 @@ export function App(): JSX.Element {
                   {view === 'library' && <LibraryView />}
                   {view === 'sources' && <SourceCenterView />}
                   {view === 'settings' && <SettingsView />}
-                </motion.div>
-              </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>

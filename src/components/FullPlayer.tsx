@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, X, Volume2, Repeat, Repeat1, Shuffle, Loader2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, X, Volume2, Repeat, Repeat1, Shuffle, Loader2, Plus } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { parseLrc, currentIndex, type LrcLine } from '../utils/lrc'
 import { LimbusPerformance } from './LimbusPerformance'
-import { motion } from 'framer-motion'
+import { AddToPlaylistDialog } from './SongTable'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const fmt = (sec: number) => {
   if (!isFinite(sec) || sec < 0) return '0:00'
@@ -46,6 +47,7 @@ export function FullPlayer(): JSX.Element {
 
   const [lrc, setLrc] = useState<LrcLine[]>([])
   const [showLimbus, setShowLimbus] = useState(false)
+  const [plSong, setPlSong] = useState<import('../types').Song | null>(null)
   useEffect(() => {
     let alive = true
     setLrc([])
@@ -80,13 +82,7 @@ export function FullPlayer(): JSX.Element {
   }
 
   return (
-    <motion.div
-      className="full-player"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.22 }}
-    >
+    <div className="full-player">
       {current?.picUrl && <img className="fp-bg" src={current.picUrl} alt="" />}
       <div className="fp-shade" />
 
@@ -99,7 +95,14 @@ export function FullPlayer(): JSX.Element {
             : <Play size={64} color="var(--text-3)" />}
         </div>
         <div className="fp-right">
-          <div className="fp-title">{current?.name ?? ''}</div>
+          <div className="fp-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>{current?.name ?? ''}</span>
+            {current && (
+              <button className="fp-limbus-btn" title="加入歌单" onClick={() => setPlSong(current)}>
+                <Plus size={13} />
+              </button>
+            )}
+          </div>
           <div className="fp-artist">
             {current?.artist ?? ''}{current?.album ? ' · ' + current.album : ''}
             <button
@@ -191,6 +194,9 @@ export function FullPlayer(): JSX.Element {
           </div>
         </div>
       </div>
-    </motion.div>
+      <AnimatePresence>
+        {plSong && <AddToPlaylistDialog song={plSong} onClose={() => setPlSong(null)} />}
+      </AnimatePresence>
+    </div>
   )
 }

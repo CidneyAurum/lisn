@@ -9,6 +9,7 @@ import { MediaServer } from './mediaServer'
 import { DownloadManager } from './downloader'
 import { Song } from './sources/spi'
 import { PlaylistStore } from './playlists'
+import { read as id3Read } from 'node-id3'
 
 export interface IpcDeps {
   getWin: () => BrowserWindow | null
@@ -75,7 +76,24 @@ export function registerIpc(deps: IpcDeps): void {
     }
   })
   ipcMain.handle('media:pic', (_e, song: Song) => registry.getPic(song))
-  ipcMain.handle('media:lyric', (_e, song: Song) => registry.getLyric(song))
+  ipcMain.handle('media:lyric', (_e, song: Song) => {
+    // 本地文件:只认同名 .lrc 或 ID3 内嵌歌词,避免错配在线歌词
+    if (song.key?.startsWith('local:')) {
+      const fp = song.key.slice('local:'.length)
+      try {
+        const lrcPath = fp.replace(/\.(mp3|flac)$/i, '.lrc')
+        if (fs.existsSync(lrcPath)) return fs.readFileSync(lrcPath, 'utf-8')
+      } catch { /* next */ }
+      try {
+        const tags: any = id3Read(fp)
+        const uslt = tags?.unsynchronisedLyrics
+        const text = Array.isArray(uslt) ? uslt[0]?.text : uslt?.text
+        if (text) return text
+      } catch { /* next */ }
+      return null
+    }
+    return registry.getLyric(song)
+  })
 
   // ---------- 下载 ----------
   ipcMain.handle('dl:enqueue', (_e, payload: { song: Song; quality: string }) => downloads.enqueue(payload.song, payload.quality))
@@ -184,6 +202,11 @@ export function registerIpc(deps: IpcDeps): void {
   })
   ipcMain.handle('pl:addSong', (_e, payload: { id: string; song: Song }) => {
     const r = deps.playlists.addSong(payload.id, payload.song)
+    deps.broadcast('playlists:changed', deps.playlists.list())
+    return r
+  })
+  ipcMain.handle('pl:setCover', (_e, payload: { id: string; cover: string | null }) => {
+    const r = deps.playlists.setCover(payload.id, payload.cover)
     deps.broadcast('playlists:changed', deps.playlists.list())
     return r
   })

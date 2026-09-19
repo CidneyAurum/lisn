@@ -58,6 +58,8 @@ const api = {
   plImport: (text: string) => ipcRenderer.invoke('pl:import', { text }) as Promise<{ ok: boolean; detail: string }>,
   plRename: (id: string, name: string) => ipcRenderer.invoke('pl:rename', { id, name }),
   plAddSong: (id: string, song: unknown) => ipcRenderer.invoke('pl:addSong', { id, song }),
+
+  plSetCover: (id: string, cover: string | null) => ipcRenderer.invoke('pl:setCover', { id, cover }),
   plRemoveSong: (id: string, songKey: string) => ipcRenderer.invoke('pl:removeSong', { id, songKey }),
   plSaveFromSearch: (name: string, keyword: string, songs: unknown[]) => ipcRenderer.invoke('pl:saveFromSearch', { name, keyword, songs }),
   onPlaylistsChanged: (cb: (list: unknown[]) => void) => {

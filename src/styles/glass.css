@@ -1006,3 +1006,15 @@ html.overlay-mode, html.overlay-mode body { background: transparent !important; 
   pointer-events: none;
 }
 .limbus-overlay .lo-canvas { display: block; width: 100%; height: 100%; }
+
+/* 视图/全屏页入场动画(纯 CSS,不依赖动画完成回调,窗口失焦也不会卡住) */
+.view-enter {
+  animation: viewEnter 0.24s var(--ease);
+}
+.full-player {
+  animation: viewEnter 0.22s var(--ease);
+}
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

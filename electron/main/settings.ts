@@ -16,13 +16,15 @@ export class SettingsStore {
   constructor(private file: string, defaultDownloadDir: string) {
     let loaded: Partial<Settings> = {}
     try { loaded = JSON.parse(fs.readFileSync(file, 'utf-8')) } catch { /* first run */ }
+    // 默认值 + 已存字段整体合并(避免白名单漏字段导致设置不记忆)
     this.data = {
-      downloadDir: loaded.downloadDir ?? defaultDownloadDir,
-      quality: loaded.quality ?? '320k',
-      mode: loaded.mode ?? 'auto',
-      intervalMs: loaded.intervalMs ?? 2500,
-      autoCheckUpdates: loaded.autoCheckUpdates ?? true,
-      playMode: loaded.playMode ?? 'loop'
+      downloadDir: defaultDownloadDir,
+      quality: '320k',
+      mode: 'auto',
+      intervalMs: 2500,
+      autoCheckUpdates: true,
+      playMode: 'loop',
+      ...loaded
     }
     this.save()
   }

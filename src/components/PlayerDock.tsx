@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines, MoonStar, Maximize2, Captions } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines, MoonStar, Maximize2, Captions, Plus } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SourceBadge } from './SourceBadge'
+import { AddToPlaylistDialog } from './SongTable'
 import { LyricPanel } from './LyricPanel'
 
 const QUALITIES = [
@@ -58,6 +59,7 @@ export function PlayerDock(): JSX.Element | null {
   const [showQuality, setShowQuality] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
+  const [plSong, setPlSong] = useState<import('../types').Song | null>(null)
   const [showLyric, setShowLyric] = useState(false)
   const [showSleep, setShowSleep] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
@@ -184,6 +186,14 @@ export function PlayerDock(): JSX.Element | null {
                       <div className="qi-name">{s.name}</div>
                       <div className="qi-artist">{s.artist}</div>
                     </div>
+                    <span
+                      className="icon-btn accent"
+                      title="加入歌单"
+                      style={{ width: 22, height: 22, flexShrink: 0 }}
+                      onClick={e => { e.stopPropagation(); setPlSong(s) }}
+                    >
+                      <Plus size={13} />
+                    </span>
                   </button>
                 ))}
                 {!queue.length && <div className="muted" style={{ padding: '14px', fontSize: 12 }}>队列空</div>}
@@ -293,6 +303,10 @@ export function PlayerDock(): JSX.Element | null {
           <Maximize2 size={16} />
         </button>
       </div>
+
+      <AnimatePresence>
+        {plSong && <AddToPlaylistDialog song={plSong} onClose={() => setPlSong(null)} />}
+      </AnimatePresence>
 
       <AnimatePresence>
         {manualBlocked && (

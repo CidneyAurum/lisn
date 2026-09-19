@@ -118,6 +118,7 @@ export interface UserPlaylist {
   name: string
   createdAt: number
   keyword?: string
+  cover?: string
   songs: Song[]
 }
 
@@ -152,6 +153,8 @@ export interface GlassApi {
   plImport(text: string): Promise<{ ok: boolean; detail: string }>
   plRename(id: string, name: string): Promise<void>
   plAddSong(id: string, song: Song): Promise<{ ok: boolean; detail: string }>
+
+  plSetCover(id: string, cover: string | null): Promise<{ ok: boolean; detail: string }>
   plRemoveSong(id: string, songKey: string): Promise<void>
   plSaveFromSearch(name: string, keyword: string, songs: Song[]): Promise<UserPlaylist>
   onPlaylistsChanged(cb: (list: UserPlaylist[]) => void): () => void

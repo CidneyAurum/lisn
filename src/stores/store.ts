@@ -61,6 +61,7 @@ interface AppState extends PlayerState {
   sleepTimerAt: number | null
   setSleepTimer: (minutes: number) => void
   setPlaying: (p: boolean) => void
+  playLocalFile: (filePath: string, name: string, artist: string) => Promise<void>
   togglePlay: () => Promise<void>
   setQuality: (q: '128k' | '320k' | 'flac') => void
   setPinnedSource: (id: string | null) => void
@@ -252,6 +253,23 @@ export const useStore = create<AppState>((set, get) => ({
     if (s) { const nextSettings = { ...s, playMode: next }; set({ settings: nextSettings }); void window.glass.patchSettings({ playMode: next }) }
   },
   setPlaying: (p) => set({ playing: p }),
+  /** 本地文件播放:更新 current(此前遗漏导致歌词/封面串到上一首在线歌曲) */
+  playLocalFile: async (filePath: string, name: string, artist: string) => {
+    const url = await window.glass.localStreamUrl(filePath)
+    const audio = getAudio()
+    const song: Song = { key: 'local:' + filePath, name, artist, origins: [] }
+    set({ current: song, queue: [song], queueIdx: 0, playing: false, loading: false, error: null, resolveInfo: null, manualBlocked: null })
+    markIntentionalLoad()
+    audio.loop = get().playMode === 'one'
+    audio.src = url
+    try {
+      await audio.play()
+      set({ playing: true, streamUrl: url })
+    } catch {
+      set({ playing: false, error: '本地文件播放失败' })
+      get().showToast('本地文件播放失败')
+    }
+  },
   togglePlay: async () => {
     const audio = getAudio()
     if (!audio.paused) { audio.pause(); return }

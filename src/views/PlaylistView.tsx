@@ -1,8 +1,52 @@
-import { Play, Loader2, ChevronLeft, Download, Trash2, X, Pencil, FileDown, FileUp, ClipboardCopy } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Play, Plus, Loader2, ChevronLeft, Download, Trash2, X, Pencil, FileDown, FileUp, ClipboardCopy } from 'lucide-react'
 import { useStore } from '../stores/store'
-import { SongTable } from '../components/SongTable'
+import { SongTable, AddToPlaylistDialog } from '../components/SongTable'
+import { AnimatePresence } from 'framer-motion'
+
+
+/** 封面选择:选图 → 居中裁 512×512 JPEG dataURL(避免依赖图像库) */
+function useCoverPicker(onPicked: (dataUrl: string | null) => void) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [busy, setBusy] = useState(false)
+  const open = () => inputRef.current?.click()
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setBusy(true)
+    try {
+      const dataUrl: string = await new Promise((res, rej) => {
+        const fr = new FileReader()
+        fr.onload = () => res(String(fr.result))
+        fr.onerror = () => rej(new Error('读取失败'))
+        fr.readAsDataURL(f)
+      })
+      const img: HTMLImageElement = await new Promise((res, rej) => {
+        const im = new Image()
+        im.onload = () => res(im)
+        im.onerror = () => rej(new Error('图片解码失败'))
+        im.src = dataUrl
+      })
+      const S = 512
+      const cv = document.createElement('canvas')
+      cv.width = S; cv.height = S
+      const ctx = cv.getContext('2d')!
+      const side = Math.min(img.width, img.height)
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S)
+      onPicked(cv.toDataURL('image/jpeg', 0.85))
+    } catch {
+      onPicked(null)
+    } finally { setBusy(false) }
+  }
+  const el = (
+    <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => void onFile(e)} />
+  )
+  return { open, el, busy }
+}
 
 export function PlaylistView(): JSX.Element {
+  const [plSong, setPlSong] = useState<import('../types').Song | null>(null)
   const playlist = useStore(s => s.playlist)
   const playlists = useStore(s => s.playlists)
   const setView = useStore(s => s.setView)
@@ -19,6 +63,13 @@ export function PlaylistView(): JSX.Element {
     if (!pl) return <div className="empty-state">歌单不存在或已删除</div>
 
     const playAll = () => { if (pl.songs.length) void play(pl.songs[0], pl.songs) }
+
+    const coverPicker = useCoverPicker(async dataUrl => {
+      if (!dataUrl) { showToast('封面处理失败,请换张图'); return }
+      const r = await window.glass.plSetCover(pl.id, dataUrl)
+      showToast(r.detail)
+      await refreshPlaylists()
+    })
 
     const downloadAll = async () => {
       for (const s of pl.songs.slice(0, 5)) await window.glass.enqueue(s, quality)
@@ -57,19 +108,26 @@ export function PlaylistView(): JSX.Element {
 
     return (
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        {coverPicker.el}
         <button className="mini-btn" style={{ marginBottom: 16 }} onClick={() => setView('discover')}>
           <ChevronLeft size={13} /> 返回发现页
         </button>
 
         <div className="row" style={{ gap: 22, marginBottom: 24, alignItems: 'flex-end' }}>
-          <div style={{
+          <div
+            title="点击更换歌单封面"
+            onClick={() => coverPicker.open()}
+            style={{
             width: 148, height: 148, borderRadius: 'var(--r-lg)',
-            background: pl.songs[0]?.picUrl ? undefined : 'linear-gradient(135deg,#39c5bb,#137a7f)',
+            background: pl.songs[0]?.picUrl || pl.cover ? undefined : 'linear-gradient(135deg,#39c5bb,#137a7f)',
+            cursor: 'pointer',
             display: 'grid', placeItems: 'center',
             boxShadow: '0 14px 40px rgba(57,197,187,.4), inset 0 1px 0 rgba(255,255,255,.2)',
             flexShrink: 0, overflow: 'hidden'
           }}>
-            {(pl.songs.filter(s => s.picUrl).length >= 4) ? (
+            {pl.cover ? (
+              <img src={pl.cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (pl.songs.filter(s => s.picUrl).length >= 4) ? (
               <div style={{ width: '100%', height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
                 {pl.songs.filter(s => s.picUrl).slice(0, 4).map((s, i) => (
                   <img key={i} src={s.picUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -89,6 +147,14 @@ export function PlaylistView(): JSX.Element {
               <button className="mini-btn" onClick={() => void downloadAll()} disabled={!pl.songs.length}>
                 <Download size={13} /> 下载前 5 首
               </button>
+              <button className="mini-btn" onClick={() => coverPicker.open()}>更换封面</button>
+
+              {pl.cover && (
+
+                <button className="mini-btn" onClick={async () => { const r = await window.glass.plSetCover(pl.id, null); showToast(r.detail); await refreshPlaylists() }}>移除封面</button>
+
+              )}
+
               <button className="mini-btn" onClick={() => void renamePl()}>
                 <Pencil size={13} /> 重命名
               </button>
@@ -123,6 +189,9 @@ export function PlaylistView(): JSX.Element {
                   <button className="icon-btn accent" title="播放" onClick={() => void play(song, pl.songs)}>
                     <Play size={15} fill="currentColor" />
                   </button>
+                  <button className="icon-btn accent" title="加入其他歌单" onClick={() => setPlSong(song)}>
+                    <Plus size={15} />
+                  </button>
                   <button className="icon-btn" title="从歌单移除" onClick={async () => {
                     await window.glass.plRemoveSong(pl.id, song.key)
                     await refreshPlaylists()
@@ -137,6 +206,10 @@ export function PlaylistView(): JSX.Element {
         ) : (
           <div className="empty-state">歌单还是空的 · 去搜索页点歌曲行的 ⊕ 添加</div>
         )}
+
+        <AnimatePresence>
+          {plSong && <AddToPlaylistDialog song={plSong} onClose={() => setPlSong(null)} />}
+        </AnimatePresence>
       </div>
     )
   }

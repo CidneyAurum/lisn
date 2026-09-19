@@ -15,12 +15,8 @@ export function LibraryView(): JSX.Element {
 
   useEffect(() => { void refreshLibrary() }, [refreshLibrary])
 
-  const playLocal = async (filePath: string) => {
-    const url = await window.glass.localStreamUrl(filePath)
-    const audio = getAudio()
-    audio.src = url
-    void audio.play()
-  }
+  const playLocalFile = useStore(s => s.playLocalFile)
+  const playLocal = (filePath: string, name: string, artist: string) => { void playLocalFile(filePath, name, artist) }
 
   if (!library?.files.length) {
     return (
@@ -49,10 +45,10 @@ export function LibraryView(): JSX.Element {
       </div>
       <div className="song-list">
         {library.files.map(f => (
-          <div key={f.filePath} className="song-row" onDoubleClick={() => void playLocal(f.filePath)}>
+          <div key={f.filePath} className="song-row" onDoubleClick={() => playLocal(f.filePath, f.name, f.artist)}>
             <div className="song-idx" />
             <div className="song-cover" style={{ borderRadius: 10 }}>
-              <Play size={14} onClick={() => void playLocal(f.filePath)} style={{ cursor: 'pointer' }} />
+              <Play size={14} onClick={() => playLocal(f.filePath, f.name, f.artist)} style={{ cursor: 'pointer' }} />
             </div>
             <div>
               <div className="song-name">{f.name}</div>

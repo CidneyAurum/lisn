@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Tray, Menu } from 'electron'
 import path from 'node:path'
 import { SourceRegistry } from './sources/registry'
 import { LxSourceManager } from './sources/lx-runner/manager'
@@ -10,6 +10,8 @@ import { PlaylistStore } from './playlists'
 import { registerIpc } from './ipc'
 
 let win: BrowserWindow | null = null
+let tray: Tray | null = null
+let quitting = false
 
 // lx 沙箱内脚本的异步网络失败（如 ikun 启动自检）可能产生未处理 rejection——只记日志，不影响应用
 process.on('unhandledRejection', (reason) => {
@@ -53,6 +55,13 @@ function createWindow(): void {
   } else {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+  // 关闭按钮 → 最小化到托盘(托盘菜单/再次点击退出)
+  win.on('close', (e) => {
+    if (!quitting && tray) {
+      e.preventDefault()
+      win?.hide()
+    }
+  })
   win.on('closed', () => { win = null })
 }
 
@@ -88,6 +97,22 @@ app.whenReady().then(async () => {
 
   await createWindow()
 
+  // 系统托盘
+  try {
+    const iconPath = path.join(app.getAppPath(), 'build/icon.png')
+    tray = new Tray(iconPath)
+    tray.setToolTip('聆 LISN')
+    const showWin = () => { win?.show(); win?.focus() }
+    tray.on('click', showWin)
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: '显示主界面', click: showWin },
+      { type: 'separator' },
+      { label: '退出', click: () => { quitting = true; app.quit() } }
+    ]))
+  } catch (e) {
+    console.warn('[tray] 初始化失败(不影响主功能)', e)
+  }
+
   // 音源脚本加载（与窗口并行展示 UI）
   void Promise.all([lx.loadAll(), mf.loadAll()]).then(([lxR, mfR]) => {
     let templates: any[] = []
@@ -102,6 +127,8 @@ app.whenReady().then(async () => {
     if (settings.get().autoCheckUpdates) { void lx.checkUpdates(); void mf.checkUpdates() }
   })
 })
+
+app.on('before-quit', () => { quitting = true })
 
 app.on('window-all-closed', () => {
   app.quit()

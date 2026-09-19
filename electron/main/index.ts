@@ -18,10 +18,21 @@ process.on('unhandledRejection', (reason) => {
   console.warn('[unhandledRejection]', String(reason).slice(0, 200))
 })
 
+function loadBounds(): { width: number; height: number; x?: number; y?: number } {
+  try {
+    const f = path.join(app.getPath('userData'), 'window-state.json')
+    const b = JSON.parse(fs.readFileSync(f, 'utf-8'))
+    if (b.width >= 1120 && b.height >= 720) return b
+  } catch { /* 首次运行 */ }
+  return { width: 1440, height: 920 }
+}
+
 function createWindow(): void {
+  const bounds = loadBounds()
   win = new BrowserWindow({
-    width: 1440,
-    height: 920,
+    width: bounds.width,
+    height: bounds.height,
+    ...(bounds.x != null ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 1120,
     minHeight: 720,
     frame: false,
@@ -57,6 +68,10 @@ function createWindow(): void {
   }
   // 关闭按钮 → 最小化到托盘(托盘菜单/再次点击退出)
   win.on('close', (e) => {
+    try {
+      const b = win?.getBounds()
+      if (b) fs.writeFileSync(path.join(app.getPath('userData'), 'window-state.json'), JSON.stringify(b))
+    } catch { /* ignore */ }
     if (!quitting && tray) {
       e.preventDefault()
       win?.hide()

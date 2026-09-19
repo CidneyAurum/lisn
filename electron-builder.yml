@@ -12,8 +12,16 @@ asar: true
 npmRebuild: false
 win:
   target:
-    - target: portable
+    - target: nsis
     - target: zip
   artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: 聆 LISN
+  artifactName: 聆LISN-安装包-${version}.${ext}
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

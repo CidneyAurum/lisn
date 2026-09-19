@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "start": "electron-vite preview",
     "smoke:sources": "node scripts/smoke-sources.mjs",
-    "dist": "electron-vite build && electron-builder --win portable zip",
+    "dist": "electron-vite build && electron-builder --win",
     "smoke:all": "tsx scripts/smoke-sources.ts && tsx scripts/smoke-lyric.ts && tsx scripts/smoke-mf.ts"
   },
   "devDependencies": {

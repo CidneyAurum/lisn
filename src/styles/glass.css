@@ -1005,7 +1005,7 @@ html.overlay-mode, html.overlay-mode body { background: transparent !important; 
   opacity: 0;
   transition: opacity var(--t-fast);
 }
-.limbus-overlay:hover .lo-chrome { opacity: 1; }
+.limbus-overlay:hover .lo-chrome:hover { opacity: 1; }
 .limbus-overlay .lo-chrome {
   display: flex; align-items: center; gap: 8px; padding: 6px 10px;
   background: rgba(13,16,23,.72); cursor: move;

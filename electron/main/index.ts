@@ -10,6 +10,16 @@ import { PlaylistStore } from './playlists'
 import { registerIpc } from './ipc'
 
 let win: BrowserWindow | null = null
+let quitting = false
+
+// 单实例锁:二次启动时聚焦已有窗口
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) { win.show(); win.focus() }
+  })
+}
 let tray: Tray | null = null
 let quitting = false
 

@@ -130,12 +130,11 @@ app.whenReady().then(async () => {
   })
 
   // ---- 桌面歌词悬浮窗(limbus 演出 overlay) ----
-  ipcMain.on('overlay:lyrics', (_e, data) => {
-    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('overlay:lyrics', data)
-  })
-  ipcMain.on('overlay:pos', (_e, sec) => {
-    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('overlay:pos', sec)
-  })
+  const sendToOverlay = (ch: string, payload: unknown) => {
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send(ch, payload as any)
+  }
+  ipcMain.on('overlay:lyrics', (_e, data) => sendToOverlay('overlay:lyrics', data))
+  ipcMain.on('overlay:pos', (_e, sec) => sendToOverlay('overlay:pos', sec))
   ipcMain.on('limbus:setLocked', (_e, v: boolean) => {
     if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.setIgnoreMouseEvents(v, { forward: true })
   })
@@ -143,7 +142,7 @@ app.whenReady().then(async () => {
     if (limbusOverlay && !limbusOverlay.isDestroyed()) {
       limbusOverlay.isVisible() ? limbusOverlay.hide() : limbusOverlay.show()
     } else {
-      limbusOverlay = new BrowserWindow({
+      const ow = new BrowserWindow({
         width: 760, height: 230, x: 120, y: 140,
         transparent: true, frame: false, hasShadow: false,
         alwaysOnTop: true, skipTaskbar: true, resizable: true,
@@ -152,10 +151,11 @@ app.whenReady().then(async () => {
           contextIsolation: true, nodeIntegration: false, sandbox: false
         }
       })
-      limbusOverlay.setAlwaysOnTop(true, 'screen-saver')
-      limbusOverlay.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
-      limbusOverlay.once('ready-to-show', () => limbusOverlay.show())
-      limbusOverlay.on('closed', () => { limbusOverlay = null })
+      limbusOverlay = ow
+      ow.setAlwaysOnTop(true, 'screen-saver')
+      ow.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
+      ow.once('ready-to-show', () => ow.show())
+      ow.on('closed', () => { if (limbusOverlay === ow) limbusOverlay = null })
     }
     const visible = !!(limbusOverlay && limbusOverlay.isVisible())
     win?.webContents.send('limbus:state', visible)

@@ -165,6 +165,10 @@ export interface GlassApi {
   maximize(): void
   close(): void
   onQueue(cb: (items: DownloadItem[]) => void): () => void
+  overlayPushLyrics(data: { lines: { timeMs: number; text: string }[]; title: string; artist: string }): void
+  overlayPushPos(sec: number): void
+  onLimbusState(cb: (visible: boolean) => void): () => void
+  limbusToggle(): Promise<boolean>
   onTrayControl(cb: (action: string) => void): () => void
   onSourcesChanged(cb: (snapshot: SourcesSnapshot) => void): () => void
 }

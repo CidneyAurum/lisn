@@ -6,6 +6,8 @@ directories:
 files:
   - out/**
   - package.json
+  - build/icon.png
+  - build/icon.ico
 asar: true
 npmRebuild: false
 win:

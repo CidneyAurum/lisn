@@ -1,6 +1,7 @@
 import { Search, Download, Library, Radio, Settings2, Music4, Compass, Moon, ListMusic, Plus } from 'lucide-react'
 import { useStore } from '../stores/store'
 import type { View } from '../stores/store'
+import mikuAvatar from '../assets/miku-avatar.png'
 
 const MAIN_NAV: { id: View; label: string; icon: typeof Search }[] = [
   { id: 'discover', label: '发现', icon: Compass },
@@ -38,8 +39,8 @@ export function Sidebar(): JSX.Element {
   return (
     <aside className="sidebar glass-sidebar">
       <div className="brand">
-        <div className="brand-icon" style={{ borderRadius: 12, background: 'linear-gradient(135deg,#39c5bb 0%,#e12885 100%)' }}>
-          <span style={{ fontSize: 19, fontWeight: 800, color: '#fff', fontFamily: 'serif' }}>聆</span>
+        <div className="brand-icon" style={{ borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+          <img src={mikuAvatar} alt="MIKU" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         </div>
         <div>
           <div className="brand-name">聆 <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-3)' }}>LISN</span></div>

@@ -195,7 +195,14 @@ app.whenReady().then(async () => {
 
   // 系统托盘
   try {
-    const iconPath = path.join(app.getAppPath(), 'build/icon.png')
+    const candidates = [
+      path.join(app.getAppPath(), 'build/icon.png'),
+      path.join(__dirname, '../../build/icon.png'),
+      path.join(process.resourcesPath ?? '', 'build/icon.png'),
+      path.join(process.resourcesPath ?? '', 'icon.png'),
+    ]
+    const iconPath = candidates.find(p => fs.existsSync(p))
+    if (!iconPath) throw new Error('托盘图标文件缺失: ' + candidates.join(' | '))
     tray = new Tray(iconPath)
     tray.setToolTip('聆 LISN')
     const showWin = () => { win?.show(); win?.focus() }

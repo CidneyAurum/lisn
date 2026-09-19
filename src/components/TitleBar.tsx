@@ -1,10 +1,11 @@
-import { Minus, Square, X, Disc3 } from 'lucide-react'
+import { Minus, Square, X } from 'lucide-react'
+import mikuAvatar from '../assets/miku-avatar.png'
 
 export function TitleBar(): JSX.Element {
   return (
     <div className="titlebar">
       <div className="title">
-        <Disc3 size={15} strokeWidth={1.8} />
+        <img src={mikuAvatar} alt="MIKU" style={{ width: 17, height: 17, borderRadius: 5, objectFit: 'cover', display: 'block' }} />
         聆 LISN
       </div>
       <div className="win-controls">

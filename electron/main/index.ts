@@ -140,6 +140,10 @@ app.whenReady().then(async () => {
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示主界面', click: showWin },
       { type: 'separator' },
+      { label: '播放 / 暂停', click: () => win?.webContents.send('tray:control', 'toggle') },
+      { label: '下一首', click: () => win?.webContents.send('tray:control', 'next') },
+      { label: '上一首', click: () => win?.webContents.send('tray:control', 'prev') },
+      { type: 'separator' },
       { label: '退出', click: () => { quitting = true; app.quit() } }
     ]))
   } catch (e) {

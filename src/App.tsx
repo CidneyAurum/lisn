@@ -32,10 +32,17 @@ export function App(): JSX.Element {
     void refreshSettings()
     void refreshDownloads()
     const offQueue = window.glass.onQueue(items => useStore.setState({ downloads: items }))
+    const offTray = window.glass.onTrayControl(action => {
+      const audio = getAudio()
+      const st = useStore.getState()
+      if (action === 'toggle') audio.paused ? void audio.play().catch(() => {}) : audio.pause()
+      else if (action === 'next') st.playNext()
+      else if (action === 'prev') st.playPrev()
+    })
     const offSources = window.glass.onSourcesChanged(snap => useStore.setState({ sources: snap }))
     const offPl = window.glass.onPlaylistsChanged(list => useStore.setState({ playlists: list }))
     void useStore.getState().refreshPlaylists()
-    return () => { offQueue(); offSources(); offPl() }
+    return () => { offQueue(); offTray(); offSources(); offPl() }
   }, [refreshSources, refreshSettings, refreshDownloads])
 
   // 全局 audio 事件绑定（单例）

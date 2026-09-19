@@ -55,6 +55,11 @@ const api = {
   maximize: () => ipcRenderer.send('win:maximize'),
   close: () => ipcRenderer.send('win:close'),
 
+  onTrayControl: (cb: (action: string) => void) => {
+    const listener = (_e: unknown, action: string) => cb(action)
+    ipcRenderer.on('tray:control', listener)
+    return () => ipcRenderer.removeListener('tray:control', listener)
+  },
   onQueue: (cb: (items: unknown[]) => void) => {
     const listener = (_e: unknown, items: unknown[]) => cb(items)
     ipcRenderer.on('dl:queue', listener)

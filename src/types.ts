@@ -165,6 +165,7 @@ export interface GlassApi {
   maximize(): void
   close(): void
   onQueue(cb: (items: DownloadItem[]) => void): () => void
+  onTrayControl(cb: (action: string) => void): () => void
   onSourcesChanged(cb: (snapshot: SourcesSnapshot) => void): () => void
 }
 

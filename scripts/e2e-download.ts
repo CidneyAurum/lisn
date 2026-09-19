@@ -52,7 +52,9 @@ async function main(): Promise<void> {
   if (received < 1000000) throw new Error('文件过小: ' + received)
 
   // ID3 标签 + 封面
-  const { write: id3Write, read: id3Read } = await import('node-id3')
+  const _id3: any = await import('node-id3')
+  const id3Write = _id3.write ?? _id3.default?.write
+  const id3Read = _id3.read ?? _id3.default?.read
   const picUrl = await registry.getPic(song).catch(() => undefined)
   let coverBytes = 0
   if (picUrl) {

@@ -89,17 +89,36 @@ export function App(): JSX.Element {
     navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
   }, [playing])
 
-  // 桌面歌词悬浮窗:歌词(换歌时)+ 播放进度(节流 250ms)推送到悬浮窗
+  // 桌面歌词悬浮窗:歌词(换歌时)+ 播放进度(节流 60ms)推送到悬浮窗
   useEffect(() => {
-    if (!current) return
-    window.glass.lyric(current).then(raw => {
-      if (!raw) return
-      window.glass.overlayPushLyrics({
-        lines: parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })),
-        title: current.name, artist: current.artist
-      })
-    }).catch(() => {})
+    const pushLyrics = () => {
+      if (!current) return
+      window.glass.lyric(current).then(raw => {
+        if (!raw) return
+        window.glass.overlayPushLyrics({
+          lines: parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })),
+          title: current.name, artist: current.artist
+        })
+      }).catch(() => {})
+    }
+    pushLyrics()
+    const off = window.glass.onOverlayRepush(pushLyrics)
+    const offCfg = window.glass.onLimbusConfig((cfg: unknown) => {
+      window.glass.overlaySetConfig(cfg)
+    })
+    return () => { off(); offCfg() }
   }, [current])
+  useEffect(() => {
+    const audio = getAudio()
+    let last = 0
+    const onTime = () => {
+      const now = Date.now()
+      if (now - last > 60) { last = now; window.glass.overlayPushPos(audio.currentTime) }
+    }
+    audio.addEventListener('timeupdate', onTime)
+    const t = setInterval(onTime, 250) // 暂停时也保底推送
+    return () => { audio.removeEventListener('timeupdate', onTime); clearInterval(t) }
+  }, [])
   useEffect(() => {
     const audio = getAudio()
     let last = 0
@@ -114,6 +133,9 @@ export function App(): JSX.Element {
     const off = window.glass.onLimbusState(v => setLimbusOnLocal(v))
     return off
   }, [])
+  useEffect(() => {
+    if ((useStore.getState().settings as any)?.limbus) window.glass.overlaySetConfig((useStore.getState().settings as any).limbus)
+  }, [(useStore.getState().settings as any)?.limbus])
 
   // 任务栏/Alt+Tab 显示当前曲
   useEffect(() => {

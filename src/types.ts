@@ -168,7 +168,10 @@ export interface GlassApi {
   overlayPushLyrics(data: { lines: { timeMs: number; text: string }[]; title: string; artist: string }): void
   overlayPushPos(sec: number): void
   onLimbusState(cb: (visible: boolean) => void): () => void
+  overlaySetConfig(cfg: unknown): void
+  onLimbusConfig(cb: (cfg: unknown) => void): () => void
   limbusToggle(): Promise<boolean>
+  onOverlayRepush(cb: () => void): () => void
   onTrayControl(cb: (action: string) => void): () => void
   onSourcesChanged(cb: (snapshot: SourcesSnapshot) => void): () => void
 }

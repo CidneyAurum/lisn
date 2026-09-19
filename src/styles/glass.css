@@ -999,18 +999,19 @@ html.overlay-mode, html.overlay-mode body { background: transparent !important; 
 .limbus-overlay {
   position: fixed; inset: 0;
   display: flex; flex-direction: column;
-  background: rgba(13,16,23,.28);
-  border: 1px solid rgba(216,165,35,.25);
-  border-radius: 18px;
-  overflow: hidden;
-  transition: border-color var(--t-fast);
+  overflow: visible;
 }
-.limbus-overlay:hover { border-color: rgba(216,165,35,.55); }
+.limbus-overlay .lo-chrome {
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.limbus-overlay:hover .lo-chrome { opacity: 1; }
 .limbus-overlay .lo-chrome {
   display: flex; align-items: center; gap: 8px; padding: 6px 10px;
   background: rgba(13,16,23,.72); cursor: move;
   -webkit-app-region: drag;
 }
+.limbus-overlay.locked .lo-canvas { cursor: default; }
 .limbus-overlay .lo-chrome.locked { display: none; }
 .limbus-overlay .lo-title {
   flex: 1; font-size: 11px; color: var(--text-2);

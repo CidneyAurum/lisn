@@ -14,6 +14,20 @@ import { useEffect, useRef, useState } from 'react'
 
 interface LrcLine { timeMs: number; text: string }
 
+declare global {
+  interface Window {
+    overlayBridge: {
+      onLyrics(cb: (data: PushedLyrics) => void): () => void
+      onPos(cb: (sec: number) => void): () => void
+      onConfig(cb: (cfg: unknown) => void): () => void
+    }
+    overlayControls: {
+      ready(): void
+      setLocked(v: boolean): void
+    }
+  }
+}
+
 interface PushedLyrics {
   lines: { timeMs: number; text: string }[]
   title: string
@@ -60,20 +74,22 @@ export function OverlayApp(): JSX.Element {
   const [lyrics, setLyrics] = useState<PushedLyrics | null>(null)
   const [posSec, setPosSec] = useState(0)
   const [locked, setLocked] = useState(false)
+  const [cfg, setCfg] = useState({ color: '#fffeef', stroke: '#d8a523', fontSize: 42, glow: true })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef({ lyrics, posSec })
   stateRef.current = { lyrics, posSec }
 
   useEffect(() => {
-    const bridge = (window as any).overlayBridge
+    const bridge = window.overlayBridge
     if (!bridge) return
     bridge.onLyrics((data: PushedLyrics) => setLyrics(data))
     bridge.onPos((sec: number) => setPosSec(sec))
-    ;(window as any).overlayControls?.ready()
+    window.overlayBridge?.onConfig?.((cfg: any) => setCfg(cfg))
+    window.overlayControls?.ready()
   }, [])
 
   useEffect(() => {
-    ;(window as any).overlayControls?.setLocked(locked)
+    window.overlayControls?.setLocked(locked)
   }, [locked])
 
   useEffect(() => {
@@ -108,7 +124,8 @@ export function OverlayApp(): JSX.Element {
       angleMin: -8, angleMax: 8,
       shakeIntensity: 2, shakeSpeed: 90,
       fadeSpeed: 0.014, riseSpeed: 0.9,
-      strokeColor: '#d8a523', textColor: '#fffeef',
+      strokeColor: cfg.stroke, textColor: cfg.color,
+      fontSize: cfg.fontSize, glow: cfg.glow,
     }
 
     const isCjk = (ch: string) => {
@@ -149,9 +166,9 @@ export function OverlayApp(): JSX.Element {
 
       if (line) {
         const chars = Array.from(line.text)
-        const shown = Math.min(chars.length, Math.floor((posMs - line.timeMs) / 50) + 1)
+        const shown = Math.min(chars.length, Math.floor((posMs - line.timeMs) / 42) + 1)
         const mode = detectLineMode(line.text) ?? 'chinese'
-        const fontPx = Math.min(34, Math.max(20, W / 28))
+        const fontPx = Math.min(state.fontSize, Math.max(18, W / 22))
         ctx.font = '700 ' + fontPx + 'px "Source Han Sans SC", Mikodacs, "Microsoft YaHei"'
         ctx.textBaseline = 'alphabetic'
         const widths = chars.map(ch => ctx.measureText(ch).width + state.spacing)
@@ -202,7 +219,7 @@ export function OverlayApp(): JSX.Element {
         }
       }
       for (const f of fading) {
-        const fontPx = Math.min(28, Math.max(17, W / 34))
+        const fontPx = Math.min(28, Math.max(16, W / 36))
         ctx.font = '700 ' + fontPx + 'px "Source Han Sans SC", Mikodacs, "Microsoft YaHei"'
         ctx.textBaseline = 'alphabetic'
         let x = (W - f.parts.reduce((a, ch) => a + ctx.measureText(ch).width + state.spacing, 0)) / 2
@@ -231,6 +248,7 @@ export function OverlayApp(): JSX.Element {
         }
       }
 
+      ;(window as any).__ovDebug = { lines: lines.length, posSec: stateRef.current.posSec, cur, hasChrome: true, now: Math.round(now % 100000) }
       raf = requestAnimationFrame(render)
     }
 

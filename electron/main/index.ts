@@ -138,12 +138,23 @@ app.whenReady().then(async () => {
   ipcMain.on('limbus:setLocked', (_e, v: boolean) => {
     if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.setIgnoreMouseEvents(v, { forward: true })
   })
+  ipcMain.on('limbus:setConfig', (_e, cfg) => {
+    settings.patch({ limbus: cfg as any })
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('limbus:config', cfg)
+  })
+  ipcMain.on('overlay:ready', () => {
+    win?.webContents.send('overlay:repush')
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('limbus:config', settings.get().limbus)
+  })
+  ipcMain.on('overlay:ready', () => {
+    win?.webContents.send('overlay:repush')
+  })
   ipcMain.handle('limbus:toggle', () => {
     if (limbusOverlay && !limbusOverlay.isDestroyed()) {
       limbusOverlay.isVisible() ? limbusOverlay.hide() : limbusOverlay.show()
     } else {
       const ow = new BrowserWindow({
-        width: 760, height: 230, x: 120, y: 140,
+        width: 980, height: 340, x: 80, y: 110,
         transparent: true, frame: false, hasShadow: false,
         alwaysOnTop: true, skipTaskbar: true, resizable: true,
         webPreferences: {
@@ -153,6 +164,9 @@ app.whenReady().then(async () => {
       })
       limbusOverlay = ow
       ow.setAlwaysOnTop(true, 'screen-saver')
+      ow.webContents.once('did-finish-load', () => {
+        ow.webContents.send('limbus:config', settings.get().limbus)
+      })
       ow.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
       ow.once('ready-to-show', () => ow.show())
       ow.on('closed', () => { if (limbusOverlay === ow) limbusOverlay = null })

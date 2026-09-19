@@ -7,6 +7,7 @@ export interface Settings {
   intervalMs: number          // 下载节流（封 IP 防护）
   autoCheckUpdates: boolean   // 启动时自动检查音源 GitHub 更新
   playMode: 'loop' | 'one' | 'shuffle'  // 播放模式:列表循环/单曲循环/随机
+  limbus?: { color: string; stroke: string; fontSize: number; glow: boolean }  // 桌面歌词配置
 }
 
 export class SettingsStore {

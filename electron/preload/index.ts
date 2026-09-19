@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const overlayBridge = {
+  onConfig: (cb: (cfg: any) => void) => {
+    const l = (_e: unknown, cfg: unknown) => cb(cfg)
+    ipcRenderer.on('limbus:config', l)
+    return () => ipcRenderer.removeListener('limbus:config', l)
+  },
   onLyrics: (cb: (data: unknown) => void) => {
     const l = (_e: unknown, data: unknown) => cb(data)
     ipcRenderer.on('overlay:lyrics', l)
@@ -78,6 +83,17 @@ const api = {
     return () => ipcRenderer.removeListener('tray:control', listener)
   },
   limbusToggle: () => ipcRenderer.invoke('limbus:toggle') as Promise<boolean>,
+  overlaySetConfig: (cfg: unknown) => ipcRenderer.send('limbus:setConfig', cfg),
+  onLimbusConfig: (cb: (cfg: any) => void) => {
+    const l = (_e: unknown, cfg: any) => cb(cfg)
+    ipcRenderer.on('limbus:config', l)
+    return () => ipcRenderer.removeListener('limbus:config', l)
+  },
+  onOverlayRepush: (cb: () => void) => {
+    const l = () => cb()
+    ipcRenderer.on('overlay:repush', l)
+    return () => ipcRenderer.removeListener('overlay:repush', l)
+  },
   onLimbusState: (cb: (visible: boolean) => void) => {
     const l = (_e: unknown, v: boolean) => cb(v)
     ipcRenderer.on('limbus:state', l)

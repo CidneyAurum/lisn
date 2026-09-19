@@ -1,5 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+const overlayBridge = {
+  onLyrics: (cb: (data: unknown) => void) => {
+    const l = (_e: unknown, data: unknown) => cb(data)
+    ipcRenderer.on('overlay:lyrics', l)
+    return () => ipcRenderer.removeListener('overlay:lyrics', l)
+  },
+  onPos: (cb: (sec: number) => void) => {
+    const l = (_e: unknown, sec: number) => cb(sec)
+    ipcRenderer.on('overlay:pos', l)
+    return () => ipcRenderer.removeListener('overlay:pos', l)
+  }
+}
+const overlayControls = {
+  ready: () => ipcRenderer.send('overlay:ready'),
+  setLocked: (v: boolean) => ipcRenderer.send('limbus:setLocked', v)
+}
+
 const api = {
   search: (keyword: string, page?: number) => ipcRenderer.invoke('search:aggregate', keyword, page),
   resolve: (song: unknown, quality: string, pinnedProviderId?: string | null) =>
@@ -60,6 +77,14 @@ const api = {
     ipcRenderer.on('tray:control', listener)
     return () => ipcRenderer.removeListener('tray:control', listener)
   },
+  limbusToggle: () => ipcRenderer.invoke('limbus:toggle') as Promise<boolean>,
+  onLimbusState: (cb: (visible: boolean) => void) => {
+    const l = (_e: unknown, v: boolean) => cb(v)
+    ipcRenderer.on('limbus:state', l)
+    return () => ipcRenderer.removeListener('limbus:state', l)
+  },
+  overlayPushLyrics: (data: unknown) => ipcRenderer.send('overlay:lyrics', data),
+  overlayPushPos: (sec: number) => ipcRenderer.send('overlay:pos', sec),
   onQueue: (cb: (items: unknown[]) => void) => {
     const listener = (_e: unknown, items: unknown[]) => cb(items)
     ipcRenderer.on('dl:queue', listener)
@@ -73,5 +98,7 @@ const api = {
 }
 
 contextBridge.exposeInMainWorld('glass', api)
+contextBridge.exposeInMainWorld('overlayBridge', overlayBridge)
+contextBridge.exposeInMainWorld('overlayControls', overlayControls)
 
 export type GlassApi = typeof api

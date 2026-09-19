@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines, MoonStar, Maximize2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines, MoonStar, Maximize2, Captions } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SourceBadge } from './SourceBadge'
@@ -38,6 +38,12 @@ export function PlayerDock(): JSX.Element | null {
   const sleepTimerAt = useStore(s => s.sleepTimerAt)
   const setSleepTimer = useStore(s => s.setSleepTimer)
   const setFullPlayer = useStore(s => s.setFullPlayer)
+  const [limbusOn, setLimbusOn] = useState(false)
+
+  useEffect(() => {
+    const off = window.glass.onLimbusState(v => setLimbusOn(v))
+    return off
+  }, [])
   const manualBlocked = useStore(s => s.manualBlocked)
   const clearManualBlocked = useStore(s => s.clearManualBlocked)
   const showToast = useStore(s => s.showToast)
@@ -270,6 +276,13 @@ export function PlayerDock(): JSX.Element | null {
         </div>
         <button className="icon-btn" onClick={doDownload} title={'下载 ' + quality.toUpperCase()}>
           <Download size={17} />
+        </button>
+        <button
+          className={'icon-btn' + (limbusOn ? ' on' : '')}
+          title="桌面歌词(Limbus 演出悬浮窗)"
+          onClick={async () => { const visible = await window.glass.limbusToggle(); setLimbusOn(!!visible) }}
+        >
+          <Captions size={17} />
         </button>
         <button className="icon-btn" title="全屏播放" onClick={() => setFullPlayer(true)}>
           <Maximize2 size={16} />

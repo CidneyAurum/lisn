@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStore } from './stores/store'
 import { TitleBar } from './components/TitleBar'
@@ -13,6 +13,7 @@ import { LibraryView } from './views/LibraryView'
 import { SourceCenterView } from './views/SourceCenterView'
 import { SettingsView } from './views/SettingsView'
 import { getAudio } from './stores/store'
+import { parseLrc } from './utils/lrc'
 
 export function App(): JSX.Element {
   const view = useStore(s => s.view)
@@ -20,6 +21,7 @@ export function App(): JSX.Element {
   const current = useStore(s => s.current)
   const playing = useStore(s => s.playing)
   const fullPlayer = useStore(s => s.fullPlayer)
+  const [limbusOnLocal, setLimbusOnLocal] = useState(false)
   const refreshSources = useStore(s => s.refreshSources)
   const refreshSettings = useStore(s => s.refreshSettings)
   const refreshDownloads = useStore(s => s.refreshDownloads)
@@ -86,6 +88,32 @@ export function App(): JSX.Element {
     if (!('mediaSession' in navigator)) return
     navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
   }, [playing])
+
+  // 桌面歌词悬浮窗:歌词(换歌时)+ 播放进度(节流 250ms)推送到悬浮窗
+  useEffect(() => {
+    if (!current) return
+    window.glass.lyric(current).then(raw => {
+      if (!raw) return
+      window.glass.overlayPushLyrics({
+        lines: parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })),
+        title: current.name, artist: current.artist
+      })
+    }).catch(() => {})
+  }, [current])
+  useEffect(() => {
+    const audio = getAudio()
+    let last = 0
+    const onTime = () => {
+      const now = Date.now()
+      if (now - last > 250) { last = now; window.glass.overlayPushPos(audio.currentTime) }
+    }
+    audio.addEventListener('timeupdate', onTime)
+    return () => audio.removeEventListener('timeupdate', onTime)
+  }, [])
+  useEffect(() => {
+    const off = window.glass.onLimbusState(v => setLimbusOnLocal(v))
+    return off
+  }, [])
 
   // 任务栏/Alt+Tab 显示当前曲
   useEffect(() => {

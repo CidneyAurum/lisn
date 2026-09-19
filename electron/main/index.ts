@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain } from 'electron'
 import path from 'node:path'
 import { SourceRegistry } from './sources/registry'
 import { LxSourceManager } from './sources/lx-runner/manager'
@@ -21,6 +21,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 let tray: Tray | null = null
+let limbusOverlay: BrowserWindow | null = null
 
 // lx 沙箱内脚本的异步网络失败（如 ikun 启动自检）可能产生未处理 rejection——只记日志，不影响应用
 process.on('unhandledRejection', (reason) => {
@@ -126,6 +127,39 @@ app.whenReady().then(async () => {
     templatesPath,
     playlists,
     broadcast
+  })
+
+  // ---- 桌面歌词悬浮窗(limbus 演出 overlay) ----
+  ipcMain.on('overlay:lyrics', (_e, data) => {
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('overlay:lyrics', data)
+  })
+  ipcMain.on('overlay:pos', (_e, sec) => {
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.webContents.send('overlay:pos', sec)
+  })
+  ipcMain.on('limbus:setLocked', (_e, v: boolean) => {
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.setIgnoreMouseEvents(v, { forward: true })
+  })
+  ipcMain.handle('limbus:toggle', () => {
+    if (limbusOverlay && !limbusOverlay.isDestroyed()) {
+      limbusOverlay.isVisible() ? limbusOverlay.hide() : limbusOverlay.show()
+    } else {
+      limbusOverlay = new BrowserWindow({
+        width: 760, height: 230, x: 120, y: 140,
+        transparent: true, frame: false, hasShadow: false,
+        alwaysOnTop: true, skipTaskbar: true, resizable: true,
+        webPreferences: {
+          preload: path.join(__dirname, '../preload/index.js'),
+          contextIsolation: true, nodeIntegration: false, sandbox: false
+        }
+      })
+      limbusOverlay.setAlwaysOnTop(true, 'screen-saver')
+      limbusOverlay.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
+      limbusOverlay.once('ready-to-show', () => limbusOverlay.show())
+      limbusOverlay.on('closed', () => { limbusOverlay = null })
+    }
+    const visible = !!(limbusOverlay && limbusOverlay.isVisible())
+    win?.webContents.send('limbus:state', visible)
+    return visible
   })
 
   await createWindow()

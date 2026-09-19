@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SourceBadge } from './SourceBadge'
@@ -32,13 +32,18 @@ export function PlayerDock(): JSX.Element | null {
   const queueIdx = useStore(s => s.queueIdx)
   const playNext = useStore(s => s.playNext)
   const playPrev = useStore(s => s.playPrev)
+  const playMode = useStore(s => s.playMode)
+  const cyclePlayMode = useStore(s => s.cyclePlayMode)
   const manualBlocked = useStore(s => s.manualBlocked)
   const clearManualBlocked = useStore(s => s.clearManualBlocked)
   const showToast = useStore(s => s.showToast)
 
   const [time, setTime] = useState(0)
   const [dur, setDur] = useState(0)
-  const [volume, setVolume] = useState(0.85)
+  const [volume, setVolume] = useState(() => {
+    const v = Number(localStorage.getItem('lisn-volume'))
+    return isNaN(v) ? 0.85 : Math.min(Math.max(v, 0), 1)
+  })
   const [showQuality, setShowQuality] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
@@ -56,7 +61,10 @@ export function PlayerDock(): JSX.Element | null {
     }
   }, [])
 
-  useEffect(() => { getAudio().volume = volume }, [volume])
+  useEffect(() => {
+    getAudio().volume = volume
+    localStorage.setItem('lisn-volume', String(volume))
+  }, [volume])
 
   if (!current && !loading) return <div style={{ height: 'var(--dock-h)' }} />
 
@@ -101,6 +109,14 @@ export function PlayerDock(): JSX.Element | null {
       {/* 中：控制 + 进度（时间在进度条两端） */}
       <div className="dock-center">
         <div className="dock-controls">
+          <button
+            className="ctrl-btn"
+            onClick={cyclePlayMode}
+            title={playMode === 'loop' ? '列表循环' : playMode === 'shuffle' ? '随机播放' : '单曲循环'}
+            style={playMode !== 'loop' ? { color: '#7fd8ff' } : {}}
+          >
+            {playMode === 'one' ? <Repeat1 size={17} /> : playMode === 'shuffle' ? <Shuffle size={17} /> : <Repeat size={17} />}
+          </button>
           <button className="ctrl-btn" onClick={playPrev} title="上一首"><SkipBack size={19} /></button>
           <button className="play-btn" onClick={() => { if (loading) return; playing ? audio.pause() : audio.play() }}>
             {loading ? <Loader2 size={19} className="spin" /> : playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}

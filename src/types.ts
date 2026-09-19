@@ -84,6 +84,7 @@ export interface Settings {
   mode: 'auto' | 'manual'
   intervalMs: number
   autoCheckUpdates: boolean
+  playMode: 'loop' | 'one' | 'shuffle'
 }
 
 export interface LibraryFile {

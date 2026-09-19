@@ -6,6 +6,7 @@ export interface Settings {
   mode: 'auto' | 'manual'
   intervalMs: number          // 下载节流（封 IP 防护）
   autoCheckUpdates: boolean   // 启动时自动检查音源 GitHub 更新
+  playMode: 'loop' | 'one' | 'shuffle'  // 播放模式:列表循环/单曲循环/随机
 }
 
 export class SettingsStore {
@@ -18,7 +19,8 @@ export class SettingsStore {
       quality: loaded.quality ?? '320k',
       mode: loaded.mode ?? 'auto',
       intervalMs: loaded.intervalMs ?? 2500,
-      autoCheckUpdates: loaded.autoCheckUpdates ?? true
+      autoCheckUpdates: loaded.autoCheckUpdates ?? true,
+      playMode: loaded.playMode ?? 'loop'
     }
     this.save()
   }

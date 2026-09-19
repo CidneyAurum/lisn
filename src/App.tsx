@@ -16,6 +16,8 @@ import { getAudio } from './stores/store'
 export function App(): JSX.Element {
   const view = useStore(s => s.view)
   const toast = useStore(s => s.toast)
+  const current = useStore(s => s.current)
+  const playing = useStore(s => s.playing)
   const refreshSources = useStore(s => s.refreshSources)
   const refreshSettings = useStore(s => s.refreshSettings)
   const refreshDownloads = useStore(s => s.refreshDownloads)
@@ -43,7 +45,38 @@ export function App(): JSX.Element {
     audio.addEventListener('pause', () => setPlaying(false))
     audio.addEventListener('ended', () => playNext())
     audio.addEventListener('error', () => { if (audio.src) setPlaying(false) })
+    // 恢复上次的音量
+    const saved = Number(localStorage.getItem('lisn-volume'))
+    if (!isNaN(saved) && saved >= 0 && saved <= 1) audio.volume = saved
   }, [setPlaying, playNext])
+
+  // 系统媒体会话(SMTC):媒体键 + 系统媒体浮层
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const audio = getAudio()
+    const ms = navigator.mediaSession
+    ms.setActionHandler('play', () => { void audio.play().catch(() => {}) })
+    ms.setActionHandler('pause', () => audio.pause())
+    ms.setActionHandler('previoustrack', () => useStore.getState().playPrev())
+    ms.setActionHandler('nexttrack', () => useStore.getState().playNext())
+    ms.setActionHandler('seekto', (d) => { if (d.seekTime != null) audio.currentTime = d.seekTime })
+    return () => { try { ms.setActionHandler('play', null); ms.setActionHandler('pause', null) } catch { /* noop */ } }
+  }, [])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.metadata = current ? new MediaMetadata({
+      title: current.name,
+      artist: current.artist,
+      album: current.album ?? '',
+      artwork: current.picUrl ? [{ src: current.picUrl, sizes: '512x512' }] : []
+    }) : null
+  }, [current])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+  }, [playing])
 
   return (
     <>

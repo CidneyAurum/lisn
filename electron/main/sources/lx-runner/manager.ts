@@ -221,7 +221,7 @@ export class LxSourceManager {
     const e = this.entries.find(x => x.id === id)
     if (!e) return
     e.enabled = enabled
-    if (!enabled) this.hosts.get(id)?.dispose?.()
+    if (!enabled) this.hosts.delete(id)
     this.save()
   }
 

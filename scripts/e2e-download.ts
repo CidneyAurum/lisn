@@ -23,7 +23,8 @@ async function main(): Promise<void> {
   registry.rebuild([])
 
   // 2) 搜索（= search:aggregate IPC）
-  const songs = await registry.search('周杰伦 晴天')
+  const page = await registry.search('周杰伦 晴天')
+  const songs = page.songs
   console.log('搜索结果:', songs.length, '条')
   const song = songs.find(s => s.origins.some(o => o.platform === 'kw')) ?? songs[0]
   if (!song) throw new Error('无结果')
@@ -59,7 +60,8 @@ async function main(): Promise<void> {
     if (pr.ok) {
       const buf = Buffer.from(await pr.arrayBuffer())
       coverBytes = buf.length
-      id3Write({ title: song.name, artist: song.artist, album: song.album ?? '', image: { mime: 'image/jpeg', type: 3, description: 'Cover', imageBuffer: buf } }, filePath)
+      // 测试脚本:node-id3 的 PictureType 枚举字面量校验过严,此处放宽
+      id3Write({ title: song.name, artist: song.artist, album: song.album ?? '', image: { mime: 'image/jpeg', type: 3, description: 'Cover', imageBuffer: buf } as any }, filePath)
     }
   } else {
     id3Write({ title: song.name, artist: song.artist, album: song.album ?? '' }, filePath)

@@ -16,7 +16,13 @@ process.on('unhandledRejection', (reason) => {
 async function main(): Promise<void> {
   console.log('=== [1] GD 搜索 ===')
   const gd = new GdProvider()
-  const songs = await gd.search('周杰伦 晴天')
+  let songs = await gd.search('周杰伦 晴天')
+  // GD 偶发限流导致单源空结果,重试一次再判定
+  if (!songs.some(s2 => s2.origins.some(o => o.platform === 'kw'))) {
+    console.log('  (kw 首搜为空 —— GD 偶发限流,3s 后重试)')
+    await new Promise(r => setTimeout(r, 3000))
+    songs = await gd.search('周杰伦 晴天')
+  }
   console.log('GD 搜索返回:', songs.length, '条')
   const kwSong = songs.find(s => s.origins.some(o => o.platform === 'kw'))
   const wySong = songs.find(s => s.origins.some(o => o.platform === 'wy'))

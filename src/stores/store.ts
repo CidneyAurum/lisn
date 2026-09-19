@@ -52,6 +52,8 @@ interface AppState extends PlayerState {
   play: (song: Song, list?: Song[]) => Promise<void>
   playNext: () => void
   playPrev: () => void
+  playMode: 'loop' | 'one' | 'shuffle'
+  cyclePlayMode: () => void
   setPlaying: (p: boolean) => void
   setQuality: (q: '128k' | '320k' | 'flac') => void
   setPinnedSource: (id: string | null) => void
@@ -100,6 +102,7 @@ export const useStore = create<AppState>((set, get) => ({
   playing: false,
   loading: false,
   quality: '320k',
+  playMode: 'loop',
   resolveInfo: null,
   error: null,
   manualBlocked: null,
@@ -166,6 +169,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const res = await window.glass.resolve(song, st.quality, st.pinnedSourceId)
       const audio = getAudio()
+      audio.loop = st.playMode === 'one'
       audio.src = res.streamUrl
       await audio.play()
       set({ streamUrl: res.streamUrl, playing: true, loading: false, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
@@ -181,18 +185,32 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   playNext: () => {
-    const { queue, queueIdx } = get()
+    const { queue, queueIdx, playMode } = get()
     if (!queue.length) return
-    const next = (queueIdx + 1) % queue.length
+    let next = (queueIdx + 1) % queue.length
+    if (playMode === 'shuffle' && queue.length > 1) {
+      while (next === queueIdx) next = Math.floor(Math.random() * queue.length)
+    }
     void get().play(queue[next], queue)
   },
   playPrev: () => {
-    const { queue, queueIdx } = get()
+    const { queue, queueIdx, playMode } = get()
     if (!queue.length) return
-    const prev = (queueIdx - 1 + queue.length) % queue.length
+    let prev = (queueIdx - 1 + queue.length) % queue.length
+    if (playMode === 'shuffle' && queue.length > 1) {
+      while (prev === queueIdx) prev = Math.floor(Math.random() * queue.length)
+    }
     void get().play(queue[prev], queue)
   },
 
+  cyclePlayMode: () => {
+    const cur = get().playMode
+    const next: 'loop' | 'one' | 'shuffle' = cur === 'loop' ? 'shuffle' : cur === 'shuffle' ? 'one' : 'loop'
+    set({ playMode: next })
+    getAudio().loop = next === 'one'
+    const s = get().settings
+    if (s) { const nextSettings = { ...s, playMode: next }; set({ settings: nextSettings }); void window.glass.patchSettings({ playMode: next }) }
+  },
   setPlaying: (p) => set({ playing: p }),
   setQuality: (q) => {
     set({ quality: q })
@@ -209,7 +227,7 @@ export const useStore = create<AppState>((set, get) => ({
   refreshSources: async () => set({ sources: await window.glass.sources() }),
   refreshSettings: async () => {
     const s = await window.glass.getSettings()
-    set({ settings: s, quality: s.quality })
+    set({ settings: s, quality: s.quality, playMode: s.playMode ?? 'loop' })
   },
   refreshLibrary: async () => set({ library: await window.glass.libraryScan() }),
   refreshPlaylists: async () => set({ playlists: await window.glass.plList() }),

@@ -17,7 +17,7 @@ async function main() {
     const p = mf.providerFor(entry)
     if (!p) { console.log(id + ': 未加载'); continue }
     try {
-      const songs = await p.search('周杰伦', 1)
+      const songs = await p.search?.('周杰伦', 1) ?? []
       console.log(id + ' (' + entry.platform + '):', songs.length, '条 | 首条:', songs[0] ? songs[0].name + ' / ' + songs[0].artist + ' [id=' + songs[0].origins[0].songId.slice(0, 20) + ']' : '无')
       // 试解析第一条
       if (songs[0]) {

@@ -1,4 +1,4 @@
-import { SourceProvider, SongOrigin, Platform, UA, markOk, markFail, withTimeout } from './spi'
+import { SourceProvider, SongOrigin, SourceHealth, Platform, UA, markOk, markFail, withTimeout } from './spi'
 
 /**
  * 通用 HTTP 音源模板 —— 预留接口的零代码接入形态。
@@ -25,7 +25,7 @@ export class HttpGenericProvider implements SourceProvider {
   name: string
   kind = 'http-api' as const
   caps: { platforms: Platform[]; qualities: string[]; supportsSearch: boolean }
-  health = { status: 'loading' as const, okCount: 0, failCount: 0 }
+  health: SourceHealth = { status: 'loading', okCount: 0, failCount: 0 }
 
   constructor(public config: HttpSourceConfig) {
     this.id = config.id

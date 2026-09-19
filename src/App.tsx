@@ -105,7 +105,7 @@ export function App(): JSX.Element {
     let last = 0
     const onTime = () => {
       const now = Date.now()
-      if (now - last > 250) { last = now; window.glass.overlayPushPos(audio.currentTime) }
+      if (now - last > 60) { last = now; window.glass.overlayPushPos(audio.currentTime) }
     }
     audio.addEventListener('timeupdate', onTime)
     return () => audio.removeEventListener('timeupdate', onTime)

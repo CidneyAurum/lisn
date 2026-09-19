@@ -1,3 +1,16 @@
+/* Limbus 演出字体(源自 LimbusLyricSimulator 资源) */
+@font-face {
+  font-family: 'Mikodacs';
+  src: url('/fonts/Mikodacs-1.otf') format('opentype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Han Sans SC';
+  src: url('/fonts/SourceHanSansSC-Bold-2.otf') format('opentype');
+  font-weight: 700;
+  font-display: swap;
+}
+
 /* ============================================================
    GlassMusic 设计系统 —— 苹果毛玻璃 · 深空 aurora
    材质层级: sidebar(40px) < card(28px) < dock(48px)

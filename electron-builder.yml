@@ -23,6 +23,6 @@ nsis:
   createDesktopShortcut: always
   createStartMenuShortcut: true
   shortcutName: 聆 LISN
-  artifactName: 聆LISN-安装包-${version}.${ext}
+  artifactName: LISN-Setup-${version}.${ext}
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

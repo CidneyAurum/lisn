@@ -1001,26 +1001,6 @@ html.overlay-mode, html.overlay-mode body { background: transparent !important; 
   display: flex; flex-direction: column;
   overflow: visible;
 }
-.limbus-overlay .lo-chrome {
-  opacity: 0;
-  transition: opacity var(--t-fast);
-}
 .limbus-overlay:hover .lo-chrome:hover { opacity: 1; }
-.limbus-overlay .lo-chrome {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  background: rgba(13,16,23,.72); cursor: move;
-  -webkit-app-region: drag;
-}
 .limbus-overlay.locked .lo-canvas { cursor: default; }
-.limbus-overlay .lo-chrome.locked { display: none; }
-.limbus-overlay .lo-title {
-  flex: 1; font-size: 11px; color: var(--text-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.limbus-overlay .lo-btn {
-  background: transparent; border: none; color: var(--text-2);
-  font-size: 10px; cursor: pointer; padding: 2px 6px; border-radius: 6px;
-  -webkit-app-region: no-drag;
-}
-.limbus-overlay .lo-btn:hover { color: var(--text-1); background: var(--glass-card); }
-.limbus-overlay .lo-canvas { flex: 1; width: 100%; }
+.limbus-overlay .lo-canvas { flex: 1; width: 100%; height: 100%; }

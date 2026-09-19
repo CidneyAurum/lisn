@@ -101,6 +101,15 @@ if (!app.isPackaged && process.env.LISN_CDP_PORT) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.LISN_CDP_PORT)
 }
 
+function placeLimbusOverlay(pos: string): void {
+  try {
+    const wa = require('electron').screen.getPrimaryDisplay().workArea
+    const hh = 300
+    const yy = pos === 'top' ? wa.y : pos === 'bottom' ? wa.y + wa.height - hh : wa.y + Math.floor((wa.height - hh) / 2)
+    limbusOverlay?.setPosition(wa.x, yy)
+  } catch { /* ignore */ }
+}
+
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
   const sourcesDir = path.join(userData, 'sources')
@@ -135,8 +144,8 @@ app.whenReady().then(async () => {
   }
   ipcMain.on('overlay:lyrics', (_e, data) => sendToOverlay('overlay:lyrics', data))
   ipcMain.on('overlay:pos', (_e, sec) => sendToOverlay('overlay:pos', sec))
-  ipcMain.on('limbus:setLocked', (_e, v: boolean) => {
-    if (limbusOverlay && !limbusOverlay.isDestroyed()) limbusOverlay.setIgnoreMouseEvents(v, { forward: true })
+  ipcMain.on('limbus:setPos', (_e, pos: string) => {
+    placeLimbusOverlay(pos)
   })
   ipcMain.on('limbus:setConfig', (_e, cfg) => {
     settings.patch({ limbus: cfg as any })
@@ -153,8 +162,12 @@ app.whenReady().then(async () => {
     if (limbusOverlay && !limbusOverlay.isDestroyed()) {
       limbusOverlay.isVisible() ? limbusOverlay.hide() : limbusOverlay.show()
     } else {
+      const { screen } = require('electron')
+      const wa = screen.getPrimaryDisplay().workArea
+      const h = 300
+      const pos = (settings.get().limbus as any)?.position ?? 'center'
       const ow = new BrowserWindow({
-        width: 980, height: 340, x: 80, y: 110,
+        width: wa.width, height: h, x: wa.x, y: pos === 'top' ? wa.y : pos === 'bottom' ? wa.y + wa.height - h : wa.y + Math.floor((wa.height - h) / 2),
         transparent: true, frame: false, hasShadow: false,
         alwaysOnTop: true, skipTaskbar: true, resizable: true,
         webPreferences: {
@@ -164,9 +177,19 @@ app.whenReady().then(async () => {
       })
       limbusOverlay = ow
       ow.setAlwaysOnTop(true, 'screen-saver')
+      ow.setIgnoreMouseEvents(true, { forward: true })  // 永久点击穿透,不遮挡任何操作
       ow.webContents.once('did-finish-load', () => {
         ow.webContents.send('limbus:config', settings.get().limbus)
       })
+      ipcMain.on('limbus:setPos', (_e, pos: string) => placeLimbusOverlay(String(pos)))
+      ipcMain.on('overlay:ready', () => {
+        ow.webContents.send('limbus:config', settings.get().limbus)
+      })
+      // 屏幕变化(插拔显示器)时重新按配置放置
+      const reposition = () => placeLimbusOverlay(String((settings.get().limbus as any)?.position ?? 'center'))
+      try {
+        require('electron').screen.on('display-metrics-changed', reposition)
+      } catch { /* ignore */ }
       ow.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'overlay' })
       ow.once('ready-to-show', () => ow.show())
       ow.on('closed', () => { if (limbusOverlay === ow) limbusOverlay = null })

@@ -54,6 +54,18 @@ export function SettingsView(): JSX.Element {
                 <input type="checkbox" checked={settings.limbus?.glow ?? true} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), glow: e.target.checked } })} style={{ accentColor: '#6e6bff' }} />
                 <span style={{ fontSize: 12, color: 'var(--text-2)' }}>辉光</span>
               </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>位置</span>
+                <select
+                  value={settings.limbus?.position ?? 'center'}
+                  onChange={e => { void patch({ limbus: { ...(settings.limbus ?? {}), position: e.target.value } }); window.glass.overlaySetPos(e.target.value) }}
+                  style={{ background: 'var(--bg-raise)', color: 'var(--text-1)', border: '1px solid var(--stroke)', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}
+                >
+                  <option value="top">屏幕上方</option>
+                  <option value="center">屏幕居中</option>
+                  <option value="bottom">屏幕下方</option>
+                </select>
+              </label>
               <button
                 className="mini-btn"
                 onClick={async () => {

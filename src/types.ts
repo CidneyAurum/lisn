@@ -85,7 +85,7 @@ export interface Settings {
   intervalMs: number
   autoCheckUpdates: boolean
   playMode: 'loop' | 'one' | 'shuffle'
-  limbus?: { color: string; stroke: string; fontSize: number; glow: boolean }
+  limbus?: { color: string; stroke: string; fontSize: number; glow: boolean; position: 'top' | 'center' | 'bottom' }
 }
 
 export interface LibraryFile {

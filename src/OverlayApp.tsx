@@ -73,7 +73,6 @@ interface FadingLine {
 export function OverlayApp(): JSX.Element {
   const [lyrics, setLyrics] = useState<PushedLyrics | null>(null)
   const [posSec, setPosSec] = useState(0)
-  const [locked, setLocked] = useState(false)
   const [cfg, setCfg] = useState({ color: '#fffeef', stroke: '#d8a523', fontSize: 42, glow: true })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef({ lyrics, posSec })
@@ -90,7 +89,6 @@ export function OverlayApp(): JSX.Element {
 
   useEffect(() => {
     window.overlayControls?.setLocked(locked)
-  }, [locked])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -263,17 +261,9 @@ export function OverlayApp(): JSX.Element {
 
   return (
     <div className="limbus-overlay">
-      <div className={'lo-chrome' + (locked ? ' locked' : '')}>
-        <span className="lo-title">{title ? title + ' · ' + artist : '聆 LISN 桌面歌词(Limbus 演出)'}</span>
-        <button className="lo-btn" onClick={() => setLocked(v => !v)} title={locked ? '解锁(恢复交互)' : '锁定(点击穿透)'}>
-          {locked ? '已锁定' : '未锁定'}
-        </button>
-        <button className="lo-btn" onClick={() => window.close()}>✕</button>
-      </div>
       <canvas ref={canvasRef} className="lo-canvas" />
     </div>
   )
 }
 
-// 淡出行字符种子
 function iSeed(_ch: string) { return Math.random() * 6 }

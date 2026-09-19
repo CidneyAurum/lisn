@@ -87,6 +87,13 @@ export function App(): JSX.Element {
     navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
   }, [playing])
 
+  // 任务栏/Alt+Tab 显示当前曲
+  useEffect(() => {
+    document.title = current
+      ? (playing ? '▶ ' : '') + current.name + ' - ' + current.artist + ' · 聆 LISN'
+      : '聆 LISN — 你的音乐，由此展开'
+  }, [current, playing])
+
   // 键盘控制:空格 播放/暂停,←/→ 快退/快进 5s(输入框聚焦时忽略)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
-import { useStore } from '../stores/store'
+import { useStore, getAudio } from '../stores/store'
 
 export function SettingsView(): JSX.Element {
   const settings = useStore(s => s.settings)
@@ -50,7 +50,7 @@ export function SettingsView(): JSX.Element {
             <div className="setting-desc">队列播完后的行为(单曲循环走无缝循环)</div>
             <div className="row" style={{ gap: 8, marginTop: 10 }}>
               {([['loop', '列表循环'], ['shuffle', '随机'], ['one', '单曲循环']] as const).map(([m, label]) => (
-                <button key={m} className={'mini-btn' + (settings.playMode === m ? ' primary' : '')} onClick={() => void patch({ playMode: m })}>
+                <button key={m} className={'mini-btn' + (settings.playMode === m ? ' primary' : '')} onClick={() => { void patch({ playMode: m }); getAudio().loop = (m === 'one') }}>
                   {label}
                 </button>
               ))}

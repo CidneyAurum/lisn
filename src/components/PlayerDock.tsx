@@ -43,6 +43,7 @@ export function PlayerDock(): JSX.Element | null {
 
   const [time, setTime] = useState(0)
   const [dur, setDur] = useState(0)
+  const [bufRatio, setBufRatio] = useState(0)
   const [volume, setVolume] = useState(() => {
     const v = Number(localStorage.getItem('lisn-volume'))
     return isNaN(v) ? 0.85 : Math.min(Math.max(v, 0), 1)
@@ -58,11 +59,20 @@ export function PlayerDock(): JSX.Element | null {
     const audio = getAudio()
     const onTime = () => setTime(audio.currentTime)
     const onMeta = () => setDur(audio.duration)
+    const onProg = () => {
+      try {
+        if (audio.duration && audio.buffered.length) {
+          setBufRatio(audio.buffered.end(audio.buffered.length - 1) / audio.duration)
+        }
+      } catch { /* ignore */ }
+    }
     audio.addEventListener('timeupdate', onTime)
     audio.addEventListener('loadedmetadata', onMeta)
+    audio.addEventListener('progress', onProg)
     return () => {
       audio.removeEventListener('timeupdate', onTime)
       audio.removeEventListener('loadedmetadata', onMeta)
+      audio.removeEventListener('progress', onProg)
     }
   }, [])
 
@@ -138,7 +148,7 @@ export function PlayerDock(): JSX.Element | null {
         <div className="progress-row">
           <span className="time">{fmt(time)}</span>
           <div className="progress" ref={barRef} onClick={seek}>
-            <div className="buf" style={{ ['--buf' as any]: '100%' }} />
+            <div className="buf" style={{ ['--buf' as any]: Math.min(bufRatio * 100, 100) + '%' }} />
             <div className="fill" style={{ ['--fill' as any]: (dur ? (time / dur) * 100 : 0) + '%' }} />
           </div>
           <span className="time right">{fmt(dur)}</span>

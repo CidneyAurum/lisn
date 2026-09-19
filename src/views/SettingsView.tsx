@@ -46,6 +46,20 @@ export function SettingsView(): JSX.Element {
 
         <div className="setting-row">
           <div>
+            <div className="setting-label">播放模式</div>
+            <div className="setting-desc">队列播完后的行为(单曲循环走无缝循环)</div>
+            <div className="row" style={{ gap: 8, marginTop: 10 }}>
+              {([['loop', '列表循环'], ['shuffle', '随机'], ['one', '单曲循环']] as const).map(([m, label]) => (
+                <button key={m} className={'mini-btn' + (settings.playMode === m ? ' primary' : '')} onClick={() => void patch({ playMode: m })}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="setting-row">
+          <div>
             <div className="setting-label">默认音质</div>
             <div className="setting-desc">播放与下载的优先音质（自动降级：320k → 128k）</div>
           </div>

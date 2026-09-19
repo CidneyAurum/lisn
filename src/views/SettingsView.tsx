@@ -35,6 +35,40 @@ export function SettingsView(): JSX.Element {
       <div className="song-list">
         <div className="setting-row">
           <div>
+            <div className="setting-label">桌面歌词(Limbus 演出悬浮窗)</div>
+            <div className="setting-desc">播放时悬浮在所有应用上层;配色/字号实时生效</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>歌词色</span>
+                <input type="color" value={settings.limbus?.color ?? '#fffeef'} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), color: e.target.value } })} style={{ width: 36, height: 26, border: 'none', background: 'none', cursor: 'pointer' }} />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>描边</span>
+                <input type="color" value={settings.limbus?.stroke ?? '#d8a523'} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), stroke: e.target.value } })} style={{ width: 36, height: 26, border: 'none', background: 'none', cursor: 'pointer' }} />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>字号 {settings.limbus?.fontSize ?? 42}px</span>
+                <input type="range" min={20} max={80} step={2} value={settings.limbus?.fontSize ?? 42} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), fontSize: Number(e.target.value) } })} style={{ width: 110, accentColor: '#6e6bff' }} />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={settings.limbus?.glow ?? true} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), glow: e.target.checked } })} style={{ accentColor: '#6e6bff' }} />
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>辉光</span>
+              </label>
+              <button
+                className="mini-btn"
+                onClick={async () => {
+                  const visible = await window.glass.limbusToggle()
+                  showToast(visible ? '桌面歌词已显示' : '桌面歌词已隐藏')
+                }}
+              >
+                显示 / 隐藏
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="setting-row">
+          <div>
             <div className="setting-label">关于</div>
             <div className="setting-desc">聆 LISN v{__APP_VERSION__} · 聚合音源播放器 · 仅供个人学习试听</div>
             <div className="setting-desc" style={{ marginTop: 6 }}>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines, MoonStar } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SourceBadge } from './SourceBadge'
@@ -35,6 +35,8 @@ export function PlayerDock(): JSX.Element | null {
   const playPrev = useStore(s => s.playPrev)
   const playMode = useStore(s => s.playMode)
   const cyclePlayMode = useStore(s => s.cyclePlayMode)
+  const sleepTimerAt = useStore(s => s.sleepTimerAt)
+  const setSleepTimer = useStore(s => s.setSleepTimer)
   const manualBlocked = useStore(s => s.manualBlocked)
   const clearManualBlocked = useStore(s => s.clearManualBlocked)
   const showToast = useStore(s => s.showToast)
@@ -49,6 +51,7 @@ export function PlayerDock(): JSX.Element | null {
   const [showPin, setShowPin] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
   const [showLyric, setShowLyric] = useState(false)
+  const [showSleep, setShowSleep] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -218,10 +221,37 @@ export function PlayerDock(): JSX.Element | null {
         <button
           className={'icon-btn' + (showLyric ? ' on' : '')}
           title="同步歌词"
-          onClick={() => { setShowLyric(v => !v); setShowQueue(false); setShowQuality(false); setShowPin(false) }}
+          onClick={() => { setShowLyric(v => !v); setShowQueue(false); setShowQuality(false); setShowPin(false); setShowSleep(false) }}
         >
           <AudioLines size={17} />
         </button>
+        <div className="quality-menu">
+          <button
+            className="icon-btn"
+            title="睡眠定时"
+            style={sleepTimerAt ? { color: '#7fd8ff' } : {}}
+            onClick={() => { setShowSleep(v => !v); setShowQueue(false); setShowQuality(false); setShowPin(false); setShowLyric(false) }}
+          >
+            <MoonStar size={16} />
+          </button>
+          <AnimatePresence>
+            {showSleep && (
+              <motion.div className="q-pop" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} transition={{ duration: 0.18 }}>
+                <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-3)' }}>
+                  {sleepTimerAt ? '定时中,到点自动暂停' : '播放将在选定时间后暂停'}
+                </div>
+                {[15, 30, 60].map(m => (
+                  <button key={m} className="q-opt" onClick={() => { setSleepTimer(m); setShowSleep(false) }}>
+                    <span>{m} 分钟</span>
+                  </button>
+                ))}
+                <button className="q-opt" onClick={() => { setSleepTimer(0); setShowSleep(false) }}>
+                  <span style={{ color: 'var(--danger)' }}>取消定时</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
         <button className="icon-btn" onClick={doDownload} title={'下载 ' + quality.toUpperCase()}>
           <Download size={17} />
         </button>

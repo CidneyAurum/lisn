@@ -54,6 +54,8 @@ interface AppState extends PlayerState {
   playPrev: () => void
   playMode: 'loop' | 'one' | 'shuffle'
   cyclePlayMode: () => void
+  sleepTimerAt: number | null
+  setSleepTimer: (minutes: number) => void
   setPlaying: (p: boolean) => void
   setQuality: (q: '128k' | '320k' | 'flac') => void
   setPinnedSource: (id: string | null) => void
@@ -103,6 +105,7 @@ export const useStore = create<AppState>((set, get) => ({
   loading: false,
   quality: '320k',
   playMode: 'loop',
+  sleepTimerAt: null,
   resolveInfo: null,
   error: null,
   manualBlocked: null,
@@ -203,6 +206,22 @@ export const useStore = create<AppState>((set, get) => ({
     void get().play(queue[prev], queue)
   },
 
+  setSleepTimer: (minutes: number) => {
+    const w = window as any
+    if (w.__sleepTimer) { clearTimeout(w.__sleepTimer); w.__sleepTimer = null }
+    if (minutes > 0) {
+      w.__sleepTimer = setTimeout(() => {
+        getAudio().pause()
+        set({ sleepTimerAt: null })
+        const id = Date.now()
+        set({ toast: { id, msg: '睡眠时间到,已暂停播放' } })
+        setTimeout(() => { if (get().toast?.id === id) set({ toast: null }) }, 3200)
+      }, minutes * 60000)
+      set({ sleepTimerAt: Date.now() + minutes * 60000 })
+    } else {
+      set({ sleepTimerAt: null })
+    }
+  },
   cyclePlayMode: () => {
     const cur = get().playMode
     const next: 'loop' | 'one' | 'shuffle' = cur === 'loop' ? 'shuffle' : cur === 'shuffle' ? 'one' : 'loop'

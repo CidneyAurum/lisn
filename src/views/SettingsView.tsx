@@ -48,10 +48,10 @@ export function SettingsView(): JSX.Element {
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-2)' }}>字号 {settings.limbus?.fontSize ?? 42}px</span>
-                <input type="range" min={20} max={80} step={2} value={settings.limbus?.fontSize ?? 42} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), fontSize: Number(e.target.value) } })} style={{ width: 110, accentColor: '#6e6bff' }} />
+                <input type="range" min={20} max={80} step={2} value={settings.limbus?.fontSize ?? 42} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), fontSize: Number(e.target.value) } })} style={{ width: 110, accentColor: '#39c5bb' }} />
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="checkbox" checked={settings.limbus?.glow ?? true} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), glow: e.target.checked } })} style={{ accentColor: '#6e6bff' }} />
+                <input type="checkbox" checked={settings.limbus?.glow ?? true} onChange={e => void patch({ limbus: { ...(settings.limbus ?? {}), glow: e.target.checked } })} style={{ accentColor: '#39c5bb' }} />
                 <span style={{ fontSize: 12, color: 'var(--text-2)' }}>辉光</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

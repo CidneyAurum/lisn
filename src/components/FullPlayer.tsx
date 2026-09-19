@@ -187,7 +187,7 @@ export function FullPlayer(): JSX.Element {
             <Volume2 size={16} color="var(--text-3)" />
             <input type="range" min={0} max={1} step={0.01} value={volume}
               onChange={e => { const v = Number(e.target.value); setVolume(v); audio.volume = v; localStorage.setItem('lisn-volume', String(v)) }}
-              style={{ width: 90, accentColor: '#6e6bff' }} />
+              style={{ width: 90, accentColor: '#39c5bb' }} />
           </div>
         </div>
       </div>

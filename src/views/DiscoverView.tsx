@@ -24,12 +24,12 @@ function dailyKeywords(): string[] {
 }
 
 const GRADS = [
-  'linear-gradient(135deg,#5e5ce6,#64d2ff)',
-  'linear-gradient(135deg,#ff7a95,#64d2ff)',
-  'linear-gradient(135deg,#32d074,#5e5ce6)',
-  'linear-gradient(135deg,#ffb340,#ff2d55)',
-  'linear-gradient(135deg,#39c5bb,#5e5ce6)',
-  'linear-gradient(135deg,#7d7bff,#ff2d55)'
+  'linear-gradient(135deg,#39c5bb,#137a7f)',
+  'linear-gradient(135deg,#e12885,#86cecb)',
+  'linear-gradient(135deg,#137a7f,#39c5bb)',
+  'linear-gradient(135deg,#ffb340,#e12885)',
+  'linear-gradient(135deg,#86cecb,#e12885)',
+  'linear-gradient(135deg,#56d9cf,#e12885)'
 ]
 
 export function DiscoverView(): JSX.Element {

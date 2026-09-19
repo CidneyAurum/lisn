@@ -193,7 +193,7 @@ export function PlayerDock(): JSX.Element | null {
           <input
             type="range" min={0} max={1} step={0.01} value={volume}
             onChange={e => setVolume(Number(e.target.value))}
-            style={{ width: 74, accentColor: '#6e6bff', cursor: 'pointer' }}
+            style={{ width: 74, accentColor: '#39c5bb', cursor: 'pointer' }}
           />
         </div>
 

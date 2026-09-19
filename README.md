@@ -6,6 +6,8 @@
 
 ![icon](build/icon.png)
 
+> 主题:初音未来(vocaloid)配色与背景插画 · 背景画作为「千年」曲绘(asahi_kuroi),经夜色化与透明化处理,依 [piapro character license](https://piapro.jp/copyright/chara_license) 用于非商用,来源:[yande.re](https://yande.re/post/show/392630)
+
 ## 功能(v0.1.3)
 
 - **同步歌词面板**:Dock 一键展开,随播放滚动、当前行高亮、点击行跳转

@@ -8,11 +8,11 @@ const KIND_LABEL: Record<string, string> = {
   gd: 'GD API', 'lx-script': 'lx 源脚本', 'musicfree-plugin': 'MusicFree', 'http-api': 'HTTP 模板', custom: '自定义'
 }
 const KIND_COLOR: Record<string, string> = {
-  gd: 'linear-gradient(135deg,#64d2ff,#5e5ce6)',
-  'lx-script': 'linear-gradient(135deg,#ff2d55,#ff7a95)',
-  'musicfree-plugin': 'linear-gradient(135deg,#32d074,#64d2ff)',
-  'http-api': 'linear-gradient(135deg,#ffb340,#ff2d55)',
-  custom: 'linear-gradient(135deg,#9d9bff,#64d2ff)'
+  gd: 'linear-gradient(135deg,#86cecb,#137a7f)',
+  'lx-script': 'linear-gradient(135deg,#e12885,#ff9ec2)',
+  'musicfree-plugin': 'linear-gradient(135deg,#39c5bb,#86cecb)',
+  'http-api': 'linear-gradient(135deg,#ffb340,#e12885)',
+  custom: 'linear-gradient(135deg,#e12885,#86cecb)'
 }
 
 function statusOf(p: ProviderSnapshot): 'ok' | 'error' | 'loading' | 'disabled' {

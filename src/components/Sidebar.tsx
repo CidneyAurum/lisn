@@ -38,7 +38,7 @@ export function Sidebar(): JSX.Element {
   return (
     <aside className="sidebar glass-sidebar">
       <div className="brand">
-        <div className="brand-icon" style={{ borderRadius: 12, background: 'linear-gradient(135deg,#5e5ce6 0%,#64d2ff 100%)' }}>
+        <div className="brand-icon" style={{ borderRadius: 12, background: 'linear-gradient(135deg,#39c5bb 0%,#e12885 100%)' }}>
           <span style={{ fontSize: 19, fontWeight: 800, color: '#fff', fontFamily: 'serif' }}>聆</span>
         </div>
         <div>

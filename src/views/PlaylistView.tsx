@@ -64,9 +64,9 @@ export function PlaylistView(): JSX.Element {
         <div className="row" style={{ gap: 22, marginBottom: 24, alignItems: 'flex-end' }}>
           <div style={{
             width: 148, height: 148, borderRadius: 'var(--r-lg)',
-            background: pl.songs[0]?.picUrl ? undefined : 'linear-gradient(135deg,#5e5ce6,#64d2ff)',
+            background: pl.songs[0]?.picUrl ? undefined : 'linear-gradient(135deg,#39c5bb,#137a7f)',
             display: 'grid', placeItems: 'center',
-            boxShadow: '0 14px 40px rgba(94,92,230,.4), inset 0 1px 0 rgba(255,255,255,.2)',
+            boxShadow: '0 14px 40px rgba(57,197,187,.4), inset 0 1px 0 rgba(255,255,255,.2)',
             flexShrink: 0, overflow: 'hidden'
           }}>
             {(pl.songs.filter(s => s.picUrl).length >= 4) ? (
@@ -157,9 +157,9 @@ export function PlaylistView(): JSX.Element {
       <div className="row" style={{ gap: 22, marginBottom: 24, alignItems: 'flex-end' }}>
         <div style={{
           width: 148, height: 148, borderRadius: 'var(--r-lg)',
-          background: 'linear-gradient(135deg,#5e5ce6,#64d2ff)',
+          background: 'linear-gradient(135deg,#39c5bb,#137a7f)',
           display: 'grid', placeItems: 'center',
-          boxShadow: '0 14px 40px rgba(94,92,230,.4), inset 0 1px 0 rgba(255,255,255,.2)',
+          boxShadow: '0 14px 40px rgba(57,197,187,.4), inset 0 1px 0 rgba(255,255,255,.2)',
           flexShrink: 0
         }}>
           <Play size={44} color="rgba(255,255,255,.92)" fill="rgba(255,255,255,.92)" />

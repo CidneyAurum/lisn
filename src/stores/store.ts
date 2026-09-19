@@ -53,6 +53,8 @@ interface AppState extends PlayerState {
   playNext: () => void
   playPrev: () => void
   playMode: 'loop' | 'one' | 'shuffle'
+  fullPlayer: boolean
+  setFullPlayer: (v: boolean) => void
   cyclePlayMode: () => void
   sleepTimerAt: number | null
   setSleepTimer: (minutes: number) => void
@@ -105,6 +107,7 @@ export const useStore = create<AppState>((set, get) => ({
   loading: false,
   quality: '320k',
   playMode: 'loop',
+  fullPlayer: false,
   sleepTimerAt: null,
   resolveInfo: null,
   error: null,
@@ -206,6 +209,7 @@ export const useStore = create<AppState>((set, get) => ({
     void get().play(queue[prev], queue)
   },
 
+  setFullPlayer: (v: boolean) => set({ fullPlayer: v }),
   setSleepTimer: (minutes: number) => {
     const w = window as any
     if (w.__sleepTimer) { clearTimeout(w.__sleepTimer); w.__sleepTimer = null }

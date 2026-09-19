@@ -18,6 +18,7 @@ export function App(): JSX.Element {
   const toast = useStore(s => s.toast)
   const current = useStore(s => s.current)
   const playing = useStore(s => s.playing)
+  const fullPlayer = useStore(s => s.fullPlayer)
   const refreshSources = useStore(s => s.refreshSources)
   const refreshSettings = useStore(s => s.refreshSettings)
   const refreshDownloads = useStore(s => s.refreshDownloads)
@@ -132,6 +133,9 @@ export function App(): JSX.Element {
         </div>
         <PlayerDock />
       </div>
+      <AnimatePresence>
+        {fullPlayer && current && <FullPlayer />}
+      </AnimatePresence>
       <AnimatePresence>
         {toast && (
           <motion.div

@@ -936,11 +936,11 @@ input, select { font-family: inherit; }
   mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);
 }
 .full-player .fp-lyrics .lrc-line {
-  padding: 8px 6px; font-size: 15px; color: var(--text-2);
+  padding: 8px 6px; font-size: var(--lrc-size, 16px); color: var(--text-2);
   cursor: pointer; border-radius: 10px; transition: all var(--t-fast);
 }
 .full-player .fp-lyrics .lrc-line:hover { background: var(--glass-card); color: var(--text-1); }
-.full-player .fp-lyrics .lrc-line.on { color: var(--accent); font-size: 19px; font-weight: 700; }
+.full-player .fp-lyrics .lrc-line.on { color: var(--accent); font-size: calc(var(--lrc-size, 16px) + 4px); font-weight: 700; }
 .full-player .fp-nolrc { color: var(--text-3); font-size: 13px; padding: 20px 6px; }
 .full-player .fp-controls {
   position: relative; z-index: 2;

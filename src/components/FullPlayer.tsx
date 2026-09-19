@@ -14,6 +14,7 @@ const fmt = (sec: number) => {
 export function FullPlayer(): JSX.Element {
   const current = useStore(s => s.current)
   const playing = useStore(s => s.playing)
+  const lyricSize = useStore(s => (s.settings as any)?.lyricSize ?? 16)
   const loading = useStore(s => s.loading)
   const playMode = useStore(s => s.playMode)
   const cyclePlayMode = useStore(s => s.cyclePlayMode)
@@ -102,6 +103,28 @@ export function FullPlayer(): JSX.Element {
           <div className="fp-artist">
             {current?.artist ?? ''}{current?.album ? ' · ' + current.album : ''}
             <button
+              className="fp-limbus-btn"
+              onClick={async () => {
+                const next = Math.max(12, Math.min(30, lyricSize - 2))
+                await window.glass.patchSettings({ lyricSize: next } as any)
+                await useStore.getState().refreshSettings()
+              }}
+              title="歌词字号 -"
+            >
+              A-
+            </button>
+            <button
+              className="fp-limbus-btn"
+              onClick={async () => {
+                const next = Math.max(12, Math.min(30, lyricSize + 2))
+                await window.glass.patchSettings({ lyricSize: next } as any)
+                await useStore.getState().refreshSettings()
+              }}
+              title="歌词字号 +"
+            >
+              A+
+            </button>
+            <button
               className={'fp-limbus-btn' + (showLimbus ? ' on' : '')}
               onClick={() => setShowLimbus(v => !v)}
               title="Limbus 演出模式 (L)"
@@ -134,7 +157,7 @@ export function FullPlayer(): JSX.Element {
               />
             </div>
           ) : (
-            <div className="fp-lyrics" ref={listRef}>
+            <div className="fp-lyrics" ref={listRef} style={{ ['--lrc-size' as any]: lyricSize + 'px' }}>
               {lrc.length ? lrc.map((line, i) => (
                 <div key={i} className={'lrc-line' + (i === curIdx ? ' on' : '')}
                   onClick={() => { audio.currentTime = line.timeMs / 1000 }}>

@@ -8,6 +8,7 @@ export interface Settings {
   autoCheckUpdates: boolean   // 启动时自动检查音源 GitHub 更新
   playMode: 'loop' | 'one' | 'shuffle'  // 播放模式:列表循环/单曲循环/随机
   limbus?: { color: string; stroke: string; fontSize: number; glow: boolean; position: 'top' | 'center' | 'bottom' }  // 桌面歌词配置
+  lyricSize?: number          // 全屏歌词字号 px(默认 16)
 }
 
 export class SettingsStore {

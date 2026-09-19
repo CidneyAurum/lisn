@@ -82,6 +82,11 @@ function createWindow(): void {
 
 import fs from 'node:fs'
 
+// 开发期 CDP 调试通道:LISN_CDP_PORT=9222 pnpm dev → 渲染进程可程序化验证
+if (!app.isPackaged && process.env.LISN_CDP_PORT) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.LISN_CDP_PORT)
+}
+
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
   const sourcesDir = path.join(userData, 'sources')

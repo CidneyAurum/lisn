@@ -257,3 +257,9 @@ export const useStore = create<AppState>((set, get) => ({
     setTimeout(() => { if (get().toast?.id === id) set({ toast: null }) }, 3200)
   }
 }))
+
+// 开发/测试:CDP 可通过 window.__store 驱动与检查应用状态
+if (import.meta.env.DEV) {
+  (window as any).__store = useStore
+  ;(window as any).__audio = getAudio
+}

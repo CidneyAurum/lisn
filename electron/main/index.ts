@@ -132,6 +132,7 @@ app.whenReady().then(async () => {
   const mediaServer = new MediaServer()
   await mediaServer.start()
   diagLog('[media] proxy port=' + mediaServer.port)
+  diagLog('[app] start version=' + app.getVersion() + ' build=' + new Date().toISOString().slice(0, 10) + ' features=proxy-reconnect,watchdog,diag')
 
   const lx = new LxSourceManager(sourcesDir)
   await lx.init()

@@ -1,4 +1,4 @@
-import { Play, Loader2, ChevronLeft, Download, Trash2, X, Pencil } from 'lucide-react'
+import { Play, Loader2, ChevronLeft, Download, Trash2, X, Pencil, FileDown, FileUp, ClipboardCopy } from 'lucide-react'
 import { useStore } from '../stores/store'
 import { SongTable } from '../components/SongTable'
 
@@ -31,6 +31,21 @@ export function PlaylistView(): JSX.Element {
       await window.glass.plRename(pl.id, name)
       await refreshPlaylists()
       showToast('已重命名为「' + name + '」')
+    }
+
+    const exportPl = async () => {
+      const json = await window.glass.plExport(pl.id)
+      if (!json) { showToast('导出失败'); return }
+      await navigator.clipboard.writeText(json)
+      showToast('歌单 JSON 已复制到剪贴板(' + pl.songs.length + ' 首),可导入安卓端')
+    }
+
+    const importPl = async () => {
+      const text = window.prompt('粘贴歌单 JSON 文本(可从安卓端导出):')
+      if (!text) return
+      const r = await window.glass.plImport(text)
+      showToast(r.detail)
+      await refreshPlaylists()
     }
 
     const deletePl = async () => {
@@ -70,6 +85,12 @@ export function PlaylistView(): JSX.Element {
               </button>
               <button className="mini-btn" onClick={() => void renamePl()}>
                 <Pencil size={13} /> 重命名
+              </button>
+              <button className="mini-btn" onClick={() => void exportPl()} title="复制歌单 JSON 到剪贴板">
+                <FileDown size={13} /> 导出
+              </button>
+              <button className="mini-btn" onClick={() => void importPl()} title="从剪贴板 JSON 导入">
+                <FileUp size={13} /> 导入
               </button>
               <button className="mini-btn" style={{ color: 'var(--danger)' }} onClick={() => void deletePl()}>
                 <Trash2 size={13} /> 删除歌单

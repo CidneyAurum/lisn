@@ -21,6 +21,33 @@ export class PlaylistStore {
 
   list(): UserPlaylist[] { return this.load() }
 
+  exportJson(id: string): string | null {
+    const pl = this.load().find(p => p.id === id)
+    return pl ? JSON.stringify(pl, null, 2) : null
+  }
+
+  importJson(text: string): { ok: boolean; detail: string } {
+    try {
+      const raw = JSON.parse(text)
+      const list = this.load()
+      let name: string = String(raw.name ?? '导入的歌单')
+      let n = 2
+      while (list.some(p => p.name === name)) { name = `${name} (${n++})` }
+      const songs: UserPlaylist['songs'] = Array.isArray(raw.songs)
+        ? raw.songs.filter((sg: any) => sg && sg.key && sg.name)
+        : []
+      const imported: UserPlaylist = {
+        id: 'pl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 5),
+        name, createdAt: Date.now(), keyword: '导入', songs
+      }
+      list.unshift(imported)
+      this.save(list)
+      return { ok: true, detail: `已导入「${name}」(${songs.length} 首)` }
+    } catch (e: any) {
+      return { ok: false, detail: '导入失败:' + (e?.message ?? String(e)) }
+    }
+  }
+
   create(name: string, keyword?: string): UserPlaylist {
     const list = this.load()
     const pl: UserPlaylist = { id: 'pl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 5), name: name.trim() || '未命名歌单', createdAt: Date.now(), keyword, songs: [] }

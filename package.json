@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "start": "electron-vite preview",
     "smoke:sources": "node scripts/smoke-sources.mjs",
-    "dist": "electron-vite build && electron-builder --win portable zip"
+    "dist": "electron-vite build && electron-builder --win portable zip",
+    "smoke:all": "tsx scripts/smoke-sources.ts && tsx scripts/smoke-lyric.ts && tsx scripts/smoke-mf.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
@@ -27,7 +28,8 @@
     "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
-    "zustand": "^4.5.5"
+    "zustand": "^4.5.5",
+    "tsx": "^4.23.13"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

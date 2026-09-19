@@ -849,3 +849,34 @@ input, select { font-family: inherit; }
   color: var(--text-1); font-size: 12.5px;
   outline: none;
 }
+
+/* ============ 同步歌词面板 ============ */
+.lyric-panel {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--dock-h) + 14px);
+  width: min(680px, 86vw);
+  max-height: 38vh;
+  overflow-y: auto;
+  padding: 14px 20px;
+  border-radius: var(--r-lg);
+  background: var(--glass-dock);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5), var(--inner-highlight);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 88%, transparent 100%);
+}
+.lyric-panel .lrc-line {
+  padding: 7px 10px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: color var(--t-fast), background var(--t-fast), font-size var(--t-fast);
+}
+.lyric-panel .lrc-line:hover { background: var(--glass-card); color: var(--text-1); }
+.lyric-panel .lrc-line.on { color: var(--accent); font-size: 16.5px; font-weight: 600; }
+.icon-btn.on { color: var(--accent); }

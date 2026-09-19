@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SourceBadge } from './SourceBadge'
+import { LyricPanel } from './LyricPanel'
 
 const QUALITIES = [
   { id: '320k', label: '320K', tip: '320k 极品' },
@@ -47,6 +48,7 @@ export function PlayerDock(): JSX.Element | null {
   const [showQuality, setShowQuality] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
+  const [showLyric, setShowLyric] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -88,7 +90,9 @@ export function PlayerDock(): JSX.Element | null {
   const qLabel = QUALITIES.find(q => q.id === quality)?.label ?? quality
 
   return (
-    <div className="dock glass-dock">
+    <>
+      {showLyric && <LyricPanel />}
+      <div className="dock glass-dock">
       {/* 左：封面 + 歌名/歌手 + 音质徽章（网易云式） */}
       <div className="dock-track">
         <div className={'dock-cover' + (playing ? ' breathing' : '')}>
@@ -211,6 +215,13 @@ export function PlayerDock(): JSX.Element | null {
           </AnimatePresence>
         </div>
 
+        <button
+          className={'icon-btn' + (showLyric ? ' on' : '')}
+          title="同步歌词"
+          onClick={() => { setShowLyric(v => !v); setShowQueue(false); setShowQuality(false); setShowPin(false) }}
+        >
+          <AudioLines size={17} />
+        </button>
         <button className="icon-btn" onClick={doDownload} title={'下载 ' + quality.toUpperCase()}>
           <Download size={17} />
         </button>
@@ -226,5 +237,6 @@ export function PlayerDock(): JSX.Element | null {
         )}
       </AnimatePresence>
     </div>
+    </>
   )
 }

@@ -69,7 +69,13 @@ export function PlaylistView(): JSX.Element {
             boxShadow: '0 14px 40px rgba(94,92,230,.4), inset 0 1px 0 rgba(255,255,255,.2)',
             flexShrink: 0, overflow: 'hidden'
           }}>
-            {pl.songs[0]?.picUrl
+            {(pl.songs.filter(s => s.picUrl).length >= 4) ? (
+              <div style={{ width: '100%', height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }}>
+                {pl.songs.filter(s => s.picUrl).slice(0, 4).map((s, i) => (
+                  <img key={i} src={s.picUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ))}
+              </div>
+            ) : pl.songs[0]?.picUrl
               ? <img src={pl.songs[0].picUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <Play size={44} color="rgba(255,255,255,.92)" fill="rgba(255,255,255,.92)" />}
           </div>

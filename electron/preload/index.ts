@@ -32,6 +32,7 @@ const api = {
   plList: () => ipcRenderer.invoke('pl:list'),
   plCreate: (name: string) => ipcRenderer.invoke('pl:create', name),
   plDelete: (id: string) => ipcRenderer.invoke('pl:delete', id),
+  plRename: (id: string, name: string) => ipcRenderer.invoke('pl:rename', { id, name }),
   plAddSong: (id: string, song: unknown) => ipcRenderer.invoke('pl:addSong', { id, song }),
   plRemoveSong: (id: string, songKey: string) => ipcRenderer.invoke('pl:removeSong', { id, songKey }),
   plSaveFromSearch: (name: string, keyword: string, songs: unknown[]) => ipcRenderer.invoke('pl:saveFromSearch', { name, keyword, songs }),

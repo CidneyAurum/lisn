@@ -147,6 +147,7 @@ export interface GlassApi {
   plList(): Promise<UserPlaylist[]>
   plCreate(name: string): Promise<UserPlaylist>
   plDelete(id: string): Promise<void>
+  plRename(id: string, name: string): Promise<void>
   plAddSong(id: string, song: Song): Promise<{ ok: boolean; detail: string }>
   plRemoveSong(id: string, songKey: string): Promise<void>
   plSaveFromSearch(name: string, keyword: string, songs: Song[]): Promise<UserPlaylist>

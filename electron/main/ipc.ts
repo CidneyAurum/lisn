@@ -161,6 +161,10 @@ export function registerIpc(deps: IpcDeps): void {
     deps.broadcast('playlists:changed', deps.playlists.list())
     return pl
   })
+  ipcMain.handle('pl:rename', (_e, payload: { id: string; name: string }) => {
+    deps.playlists.rename(payload.id, payload.name)
+    deps.broadcast('playlists:changed', deps.playlists.list())
+  })
   ipcMain.handle('pl:delete', (_e, id: string) => {
     deps.playlists.delete(id)
     deps.broadcast('playlists:changed', deps.playlists.list())

@@ -1,4 +1,4 @@
-import { Play, Loader2, ChevronLeft, Download, Trash2, X } from 'lucide-react'
+import { Play, Loader2, ChevronLeft, Download, Trash2, X, Pencil } from 'lucide-react'
 import { useStore } from '../stores/store'
 import { SongTable } from '../components/SongTable'
 
@@ -23,6 +23,14 @@ export function PlaylistView(): JSX.Element {
     const downloadAll = async () => {
       for (const s of pl.songs.slice(0, 5)) await window.glass.enqueue(s, quality)
       showToast('已把前 5 首加入下载队列（节流保护）')
+    }
+
+    const renamePl = async () => {
+      const name = window.prompt('重命名歌单：', pl.name)
+      if (!name || name === pl.name) return
+      await window.glass.plRename(pl.id, name)
+      await refreshPlaylists()
+      showToast('已重命名为「' + name + '」')
     }
 
     const deletePl = async () => {
@@ -59,6 +67,9 @@ export function PlaylistView(): JSX.Element {
               </button>
               <button className="mini-btn" onClick={() => void downloadAll()} disabled={!pl.songs.length}>
                 <Download size={13} /> 下载前 5 首
+              </button>
+              <button className="mini-btn" onClick={() => void renamePl()}>
+                <Pencil size={13} /> 重命名
               </button>
               <button className="mini-btn" style={{ color: 'var(--danger)' }} onClick={() => void deletePl()}>
                 <Trash2 size={13} /> 删除歌单

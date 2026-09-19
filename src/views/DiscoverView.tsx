@@ -38,6 +38,8 @@ export function DiscoverView(): JSX.Element {
   const playlists = useStore(s => s.playlists)
   const searching = useStore(s => s.searching)
   const [kw, setKw] = useState('')
+  const searchHistory = useStore(s => s.searchHistory)
+  const clearSearchHistory = useStore(s => s.clearSearchHistory)
   const [dailyLoading, setDailyLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -195,6 +197,21 @@ export function DiscoverView(): JSX.Element {
         <div className="view-sub" style={{ marginBottom: 30, lineHeight: 1.8 }}>
           还没有自建歌单：在搜索结果里点每行的 <span className="src-badge">⊕</span> 加入歌单，或在搜索页一键「存为歌单」
         </div>
+      )}
+
+      {/* 最近搜索 */}
+      {searchHistory.length > 0 && (
+        <section className="home-section">
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+            <h3 style={{ margin: 0, flex: 1 }}>最近搜索</h3>
+            <button className="mini-btn" onClick={() => clearSearchHistory()}>清空</button>
+          </div>
+          <div className="hot-chips">
+            {searchHistory.slice(0, 10).map(h => (
+              <button key={h} className="chip" onClick={() => { setKw(h); void doSearch(h); setView('search') }}>{h}</button>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* 热门搜索 */}

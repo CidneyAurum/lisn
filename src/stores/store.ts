@@ -55,6 +55,8 @@ interface AppState extends PlayerState {
   playMode: 'loop' | 'one' | 'shuffle'
   fullPlayer: boolean
   setFullPlayer: (v: boolean) => void
+  searchHistory: string[]
+  clearSearchHistory: () => void
   cyclePlayMode: () => void
   sleepTimerAt: number | null
   setSleepTimer: (minutes: number) => void
@@ -108,6 +110,7 @@ export const useStore = create<AppState>((set, get) => ({
   quality: '320k',
   playMode: 'loop',
   fullPlayer: false,
+  searchHistory: (() => { try { return JSON.parse(localStorage.getItem('lisn-search-history') || '[]') } catch { return [] } })(),
   sleepTimerAt: null,
   resolveInfo: null,
   error: null,
@@ -120,6 +123,14 @@ export const useStore = create<AppState>((set, get) => ({
   doSearch: async (kw) => {
     const keyword = (kw ?? get().keyword).trim()
     if (!keyword || get().searching) return
+    {
+      // 搜索历史:去重置顶,最多 30 条
+      const hist = get().searchHistory.filter(h => h !== keyword)
+      hist.unshift(keyword)
+      const clipped = hist.slice(0, 30)
+      set({ searchHistory: clipped })
+      try { localStorage.setItem('lisn-search-history', JSON.stringify(clipped)) } catch { /* 配额 */ }
+    }
     set({ searching: true, searched: true, keyword, error: null, results: [], page: 1, hasMore: false })
     try {
       const r = await window.glass.search(keyword, 1)
@@ -210,6 +221,10 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setFullPlayer: (v: boolean) => set({ fullPlayer: v }),
+  clearSearchHistory: () => {
+    set({ searchHistory: [] })
+    try { localStorage.removeItem('lisn-search-history') } catch { /* ignore */ }
+  },
   setSleepTimer: (minutes: number) => {
     const w = window as any
     if (w.__sleepTimer) { clearTimeout(w.__sleepTimer); w.__sleepTimer = null }

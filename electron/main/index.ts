@@ -17,6 +17,10 @@ let quitting = false
 process.on('unhandledRejection', (reason) => {
   console.warn('[unhandledRejection]', String(reason).slice(0, 200))
 })
+// 未捕获异常同样兜底（如 AbortSignal 超时）：记日志不弹 GUI 错误框，避免打扰
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err?.stack ?? String(err))
+})
 
 function loadBounds(): { width: number; height: number; x?: number; y?: number } {
   try {

@@ -82,7 +82,7 @@ export function SettingsView(): JSX.Element {
         <div className="setting-row">
           <div>
             <div className="setting-label">关于</div>
-            <div className="setting-desc">聆 LISN v{__APP_VERSION__} · 聚合音源播放器 · 仅供个人学习试听</div>
+            <div className="setting-desc">聆 LISN v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'} · 聚合音源播放器 · 仅供个人学习试听</div>
             <div className="setting-desc" style={{ marginTop: 6 }}>
               GitHub: github.com/CidneyAurum/lisn · 📱 安卓版: lisn-mobile
             </div>
@@ -147,8 +147,8 @@ export function SettingsView(): JSX.Element {
           <div className="row">
             <input
               className="path-input"
-              type="number" min={500} max={30000} step={500}
-              defaultValue={settings.intervalMs}
+              type="text" inputMode="numeric"
+              defaultValue={String(settings.intervalMs ?? 2500)}
               style={{ maxWidth: 130, textAlign: 'center' }}
               onBlur={e => { const v = Math.max(500, Math.min(30000, Number(e.target.value) || 2500)); void patch({ intervalMs: v }) }}
             />

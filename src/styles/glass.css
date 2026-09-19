@@ -111,25 +111,21 @@ input, select { font-family: inherit; }
   border-radius: 50%;
   filter: blur(90px);
   opacity: 0.5;
-  will-change: transform;
 }
 .aurora-blob.b1 {
   width: 620px; height: 620px;
   background: radial-gradient(circle, rgba(57, 197, 187, 0.34), transparent 65%);
   top: -180px; left: 8%;
-  animation: drift1 64s var(--ease) infinite alternate;
 }
 .aurora-blob.b2 {
   width: 520px; height: 520px;
   background: radial-gradient(circle, rgba(225, 40, 133, 0.2), transparent 65%);
   bottom: -140px; right: 4%;
-  animation: drift2 58s var(--ease) infinite alternate;
 }
 .aurora-blob.b3 {
   width: 460px; height: 460px;
   background: radial-gradient(circle, rgba(134, 206, 203, 0.16), transparent 65%);
   top: 34%; right: 28%;
-  animation: drift3 72s var(--ease) infinite alternate;
 }
 @keyframes drift1 { to { transform: translate(200px, 160px) scale(1.12); } }
 @keyframes drift2 { to { transform: translate(-170px, -120px) scale(0.92); } }

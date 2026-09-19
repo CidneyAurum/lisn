@@ -61,6 +61,11 @@ function createWindow(): void {
     }
   })
   win.once('ready-to-show', () => win?.show())
+  // 渲染进程崩溃(含 OOM/GPU 异常)自动重载,避免留下黑窗
+  win.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[render-process-gone]', details.reason, details.exitCode)
+    setTimeout(() => { try { win?.webContents.reload() } catch { /* ignore */ } }, 500)
+  })
   // 开发期调试截图：GLASS_DEBUG_SHOT=1 时 2.5s 后截屏
   if (process.env.GLASS_DEBUG_SHOT === '1') {
     win.webContents.once('did-finish-load', () => {

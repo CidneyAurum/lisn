@@ -3,7 +3,6 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify('0.1.5') },
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
@@ -21,6 +20,7 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, 'src'),
     plugins: [react()],
+    define: { __APP_VERSION__: JSON.stringify('0.1.5') },
     build: {
       outDir: 'out/renderer',
       rollupOptions: { input: resolve(__dirname, 'src/index.html') }

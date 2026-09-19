@@ -113,8 +113,13 @@ export function PlayerDock(): JSX.Element | null {
     <>
       {showLyric && <LyricPanel />}
       <div className="dock glass-dock">
-      {/* 左：封面 + 歌名/歌手 + 音质徽章（网易云式） */}
-      <div className="dock-track">
+      {/* 左：封面 + 歌名/歌手 + 音质徽章（网易云式）;点击展开全屏播放页 */}
+      <div
+        className="dock-track"
+        onClick={() => useStore.getState().setFullPlayer?.(true)}
+        title="展开播放页 / 歌词"
+        style={{ cursor: 'pointer' }}
+      >
         <div className={'dock-cover' + (playing ? ' breathing' : '')}>
           {current?.picUrl ? <img src={current.picUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Play size={18} />}
         </div>

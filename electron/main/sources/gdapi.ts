@@ -85,7 +85,12 @@ export class GdProvider implements SourceProvider {
     try {
       const j = await gdFetch({ types: 'lyric', source: PLATFORM_TO_GD[origin.platform], id: String(lyricId) })
       if (typeof j === 'string') return j.startsWith('http') ? undefined : j
-      return j?.lyric ?? undefined
+      const raw = j?.lyric ?? undefined
+      if (!raw) return undefined
+      // 外语歌优先中文翻译:GD 返回 tlyric 时按时间就近替换行文本
+      const tlyric = typeof j?.tlyric === 'string' ? j.tlyric : ''
+      if (tlyric && isForeignLyric(raw)) return mergeTranslation(raw, tlyric)
+      return raw
     } catch { return undefined }
   }
 
@@ -95,4 +100,50 @@ export class GdProvider implements SourceProvider {
       return { ok: songs.length > 0, detail: '搜索返回 ' + songs.length + ' 条' }
     } catch (e) { return { ok: false, detail: String(e) } }
   }
+}
+
+
+/** 外语判定:含日语假名/韩语谚文即外语;拉丁字母占比 > 0.7 视为外语 */
+export function isForeignLyric(lrc: string): boolean {
+  const lines = lrc.split('\n')
+    .map(l => l.replace(/^\[[^\]]*\]/, '').trim())
+    .filter(t => t && !/^[^\s:：]{1,6}[：:]/.test(t) && !/作词|作曲|编曲|制作|翻译/.test(t))
+    .slice(0, 10)
+  const sample = lines.join(' ')
+  if (!sample) return false
+  if (/[ぁ-んァ-ヶ]/.test(sample)) return true
+  if (/[가-힣]/.test(sample)) return true
+  let latin = 0
+  let total = 0
+  for (const ch of sample) {
+    if (/[a-zA-Z]/.test(ch)) latin++
+    const o = ch.codePointAt(0)!
+    if (o >= 0x4e00 && o <= 0x9fff) total++
+  }
+  return latin + total > 0 && latin / (latin + total) > 0.7
+}
+
+/** 按译文时间戳(±200ms 就近)替换原文行文本,时间轴保持原文 */
+export function mergeTranslation(origLrc: string, tlyric: string): string {
+  const parseMs = (m: RegExpMatchArray) =>
+    (+m[1]) * 60000 + (+m[2]) * 1000 + (m[3] ? +String(m[3]).padEnd(3, '0').slice(0, 3) : 0)
+  const tmap: Array<{ ms: number; text: string }> = []
+  for (const line of tlyric.split('\n')) {
+    const m = line.match(/^\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/)
+    if (!m) continue
+    const text = line.replace(/^\[[^\]]*\]/, '').trim()
+    if (text) tmap.push({ ms: parseMs(m as unknown as RegExpMatchArray), text })
+  }
+  if (!tmap.length) return origLrc
+  return origLrc.split('\n').map(line => {
+    const m = line.match(/^(\[[^\]]*\])/)
+    const tm = line.match(/^\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/)
+    if (!m || !tm) return line
+    const ms = parseMs(tm as unknown as RegExpMatchArray)
+    let best: { ms: number; text: string } | null = null
+    for (const t of tmap) {
+      if (Math.abs(t.ms - ms) <= 200 && (!best || Math.abs(t.ms - ms) < Math.abs(best.ms - ms))) best = t
+    }
+    return best ? m[1] + best.text : line
+  }).join('\n')
 }

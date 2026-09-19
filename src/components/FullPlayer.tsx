@@ -22,6 +22,8 @@ export function FullPlayer(): JSX.Element {
   const playPrev = useStore(s => s.playPrev)
   const setFullPlayer = useStore(s => s.setFullPlayer)
   const quality = useStore(s => s.quality)
+  const refreshSettings = useStore(s => s.refreshSettings)
+  const showToast = useStore(s => s.showToast)
 
   const audio = getAudio()
   const [time, setTime] = useState(audio.currentTime)
@@ -93,7 +95,22 @@ export function FullPlayer(): JSX.Element {
         <div className="fp-right">
           <div className="fp-title">{current?.name ?? ''}</div>
           <div className="fp-artist">{current?.artist ?? ''}{current?.album ? ' · ' + current.album : ''}</div>
-          <div className="fp-quality">{quality.toUpperCase()} · {playMode === 'loop' ? '列表循环' : playMode === 'shuffle' ? '随机' : '单曲循环'}</div>
+          <div
+            className="fp-quality"
+            style={{ cursor: 'pointer' }}
+            title="点击切换音质(下一首生效)"
+            onClick={() => {
+              const order = ['128k', '320k', 'flac']
+              const cur = useStore.getState().quality
+              const next = (order as readonly string[])[(order.indexOf(cur) + 1) % order.length] as '128k' | '320k' | 'flac'
+              void window.glass.patchSettings({ quality: next }).then(async () => {
+                await useStore.getState().refreshSettings()
+                useStore.getState().showToast('音质切换为 ' + next.toUpperCase() + ',下一首生效')
+              })
+            }}
+          >
+            {quality.toUpperCase()} · {playMode === 'loop' ? '列表循环' : playMode === 'shuffle' ? '随机' : '单曲循环'}
+          </div>
           <div className="fp-lyrics" ref={listRef}>
             {lrc.length ? lrc.map((line, i) => (
               <div key={i} className={'lrc-line' + (i === curIdx ? ' on' : '')}

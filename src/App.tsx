@@ -99,6 +99,7 @@ export function App(): JSX.Element {
           lines: parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })),
           title: current.name, artist: current.artist
         })
+        window.glass.overlayPushPos(getAudio().currentTime)
       }).catch(() => {})
     }
     pushLyrics()
@@ -112,22 +113,14 @@ export function App(): JSX.Element {
     const audio = getAudio()
     let last = 0
     const onTime = () => {
+      // 无真实音源(解析失败/空闲)时不推送,避免 pos=0 持续覆盖
+      if (!audio.src || !isFinite(audio.duration) || audio.duration <= 0) return
       const now = Date.now()
       if (now - last > 60) { last = now; window.glass.overlayPushPos(audio.currentTime) }
     }
     audio.addEventListener('timeupdate', onTime)
     const t = setInterval(onTime, 250) // 暂停时也保底推送
     return () => { audio.removeEventListener('timeupdate', onTime); clearInterval(t) }
-  }, [])
-  useEffect(() => {
-    const audio = getAudio()
-    let last = 0
-    const onTime = () => {
-      const now = Date.now()
-      if (now - last > 60) { last = now; window.glass.overlayPushPos(audio.currentTime) }
-    }
-    audio.addEventListener('timeupdate', onTime)
-    return () => audio.removeEventListener('timeupdate', onTime)
   }, [])
   useEffect(() => {
     const off = window.glass.onLimbusState(v => setLimbusOnLocal(v))

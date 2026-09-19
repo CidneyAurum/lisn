@@ -284,8 +284,6 @@ useStore.subscribe((s, p) => {
   }
 })
 
-// 开发/测试:CDP 可通过 window.__store 驱动与检查应用状态
-if (import.meta.env.DEV) {
-  (window as any).__store = useStore
-  ;(window as any).__audio = getAudio
-}
+// 调试/E2E:CDP 可通过 window.__store 驱动与检查应用状态(本地应用,常驻无害)
+;(window as any).__store = useStore
+;(window as any).__audio = getAudio

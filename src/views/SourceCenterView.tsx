@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Radio, RefreshCw, ArrowUp, ArrowDown, Plus, ChevronDown, Link2, Zap, TestTube, RotateCcw } from 'lucide-react'
+import { Radio, RefreshCw, ArrowUp, ArrowDown, Plus, ChevronDown, Link2, Zap, TestTube, RotateCcw, Loader2 } from 'lucide-react'
 import { useStore } from '../stores/store'
 import type { ProviderSnapshot, LxEntrySnap } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -85,6 +85,25 @@ export function SourceCenterView(): JSX.Element {
     showToast((r.ok ? '✓ ' : '✗ ') + id + '：' + r.detail)
   }
 
+  const [testingAll, setTestingAll] = useState(false)
+  const doTestAll = async () => {
+    if (!sources) return
+    setTestingAll(true)
+    let okCount = 0
+    const total = sources.providers.length
+    for (const p of sources.providers) {
+      try {
+        const r = await window.glass.testSource(p.id)
+        if (r.ok) okCount++
+        showToast((r.ok ? '✓ ' : '✗ ') + p.name + '：' + r.detail)
+        await new Promise(res => setTimeout(res, 400))
+      } catch { /* 单源失败继续 */ }
+    }
+    setTestingAll(false)
+    showToast(`全部测试完成：${okCount}/${total} 可用`)
+    await refreshSources()
+  }
+
   if (!sources) return <div className="empty-state">加载音源信息…</div>
 
   return (
@@ -96,6 +115,9 @@ export function SourceCenterView(): JSX.Element {
           <div className="view-sub" style={{ margin: '4px 0 0' }}>解析模式 · 优先级链路 · GitHub 同步升级</div>
         </div>
         <div className="spacer" />
+        <button className="mini-btn" disabled={testingAll} onClick={() => void doTestAll()} title="逐个测试所有音源">
+          {testingAll ? <Loader2 size={12} className="spin" /> : <TestTube size={12} />} 全部测试
+        </button>
         <div className="segmented">
           <button className={'seg-btn' + (sources.mode === 'auto' ? ' on' : '')} onClick={() => useStore.setState({ sources: sources ? { ...sources, mode: 'auto' } : sources })}>
             智能自动

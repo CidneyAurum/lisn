@@ -13,6 +13,8 @@ export interface ResolveResult {
   providerId: string
   platform: string
   quality: string
+  crossPlatform?: boolean
+  note?: string
 }
 
 export interface SearchPage {
@@ -27,9 +29,23 @@ const QUALITY_CHAIN: Record<string, string[]> = {
   '128k': ['128k', '320k']
 }
 
+/** 强归一化:去空白/标点、全角转半角、统一大小写,使不同源的同一首歌合并为一条 */
+function normText(s: string): string {
+  let out = ''
+  for (const ch of String(s ?? '')) {
+    const code = ch.codePointAt(0)!
+    // 全角 ASCII → 半角
+    const c = code >= 0xff01 && code <= 0xff5e ? String.fromCodePoint(code - 0xfee0) : ch
+    if (/[\s()（）\[\]【】{}·・\-—–_,.、!！?？'"“”‘’:：;；/\|&+*#~^$@%]/.test(c)) continue
+    out += c.toLowerCase()
+  }
+  return out
+}
+
 function normalizeKey(name: string, artist: string): string {
-  const firstArtist = String(artist).split('/')[0].trim()
-  return (String(name).trim() + '|' + firstArtist).toLowerCase()
+  // 歌手只取第一位(跨源常出现 "A/B" vs "A" 的差异)
+  const firstArtist = String(artist ?? '').split(/[/、,&]|feat\.?/i)[0]
+  return normText(name) + '|' + normText(firstArtist).slice(0, 8)
 }
 
 function mergeSongs(target: Map<string, Song>, list: Song[]): number {
@@ -152,6 +168,26 @@ export class SourceRegistry {
       const r = await this.tryProvider(p, song, chain, errBox)
       if (r) return r
     }
+
+    // 跨平台兜底:本曲所属平台无可用源(如 Q音 tx)时,
+    // 按「歌名+歌手」在 GD 搜索同曲,用其它平台的等价音源播放
+    try {
+      const gd = this.providers.find(x => x.id === 'gd')
+      if (gd?.search) {
+        const hits = await withTimeout(gd.search(song.name.trim() + ' ' + song.artist.trim(), 1), 12000)
+        const norm = (s: string) => s.toLowerCase().replace(/[\s()（）\[\]【】·\-—_,.、!！?？'"“”]/g, '')
+        const wantName = norm(song.name)
+        const wantArtist = norm(song.artist.split(/[/、,&]/)[0] ?? '')
+        const hit = hits.find(h => norm(h.name) === wantName && norm(h.artist).includes(wantArtist.slice(0, 4)))
+          ?? hits.find(h => norm(h.name) === wantName)
+          ?? hits.find(h => norm(h.name).includes(wantName) || wantName.includes(norm(h.name)))
+        if (hit) {
+          const r = await this.tryProvider(gd, hit, chain, errBox)
+          if (r) return { ...r, crossPlatform: true, note: '跨平台音源(' + hit.origins[0]?.platform + ')' }
+        }
+      }
+    } catch { /* ignore */ }
+
     throw new ResolveError('所有音源均无法解析' + (errMsg() ? '：' + errMsg() : ''), 'all-failed')
   }
 

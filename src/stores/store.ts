@@ -9,7 +9,7 @@ interface PlayerState {
   playing: boolean
   loading: boolean
   quality: '128k' | '320k' | 'flac'
-  resolveInfo: { providerId: string; platform: string; quality: string } | null
+  resolveInfo: { providerId: string; platform: string; quality: string; note?: string } | null
   error: string | null
   manualBlocked: Song | null
   pinnedSourceId: string | null
@@ -76,6 +76,7 @@ interface AppState extends PlayerState {
 
 // 模块级 <audio> 单例
 let audioEl: HTMLAudioElement | null = null
+let playToken = 0
 export function getAudio(): HTMLAudioElement {
   if (!audioEl) {
     audioEl = new Audio()
@@ -180,6 +181,8 @@ export const useStore = create<AppState>((set, get) => ({
     const st = get()
     const queue = list ?? st.results
     const idx = queue.findIndex(x => x.key === song.key)
+    // 播放序号:快速切歌时,过期请求的结果一律丢弃(避免旧请求的 AbortError 误报解析失败)
+    const token = ++playToken
     set({
       current: song, playing: false, loading: true, error: null, manualBlocked: null,
       queue, queueIdx: idx >= 0 ? idx : st.queueIdx
@@ -187,14 +190,23 @@ export const useStore = create<AppState>((set, get) => ({
     get().ensurePics([song])
     try {
       const res = await window.glass.resolve(song, st.quality, st.pinnedSourceId)
+      if (token !== playToken) return // 已被更新的播放请求取代
       const audio = getAudio()
       audio.loop = st.playMode === 'one'
       markIntentionalLoad()
       audio.src = res.streamUrl
       await audio.play()
-      set({ streamUrl: res.streamUrl, playing: true, loading: false, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
+      if (token !== playToken) return
+      set({ streamUrl: res.streamUrl, playing: true, loading: false, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality, note: (res as any).note } })
+      if ((res as any).crossPlatform) get().showToast('原平台无可用源,已用' + ((res as any).note ?? '跨平台音源') + '播放')
     } catch (e: any) {
+      if (token !== playToken) return // 过期请求的失败(含 play() 被新加载打断)忽略
       const msg = String(e?.message ?? e)
+      // play() 被新的加载请求打断属于正常竞态,不是解析失败
+      if (e?.name === 'AbortError' || msg.includes('interrupted by a new load request')) {
+        set({ loading: false })
+        return
+      }
       if (msg.includes('manual-blocked')) {
         set({ loading: false, manualBlocked: song, error: null })
       } else {

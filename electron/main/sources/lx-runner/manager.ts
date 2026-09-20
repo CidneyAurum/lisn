@@ -41,6 +41,42 @@ export const DEFAULT_LX_SOURCES: LxSourceEntry[] = [
     repo: 'pdone/lx-music-source', file: 'sixyin/latest.js', branch: 'main',
     rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/sixin/latest.js',
     jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/sixin/latest.js'
+  },
+  {
+    id: 'changqing', name: '长青 SVIP 音源', enabled: true,
+    repo: 'pdone/lx-music-source', file: 'changqing/latest.js', branch: 'main',
+    rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/changqing/latest.js',
+    jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/changqing/latest.js'
+  },
+  {
+    id: 'lx', name: '独家音源', enabled: true,
+    repo: 'pdone/lx-music-source', file: 'lx/latest.js', branch: 'main',
+    rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/lx/latest.js',
+    jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/lx/latest.js'
+  },
+  {
+    id: 'huanyin', name: '幻音音源', enabled: true,
+    repo: 'pdone/lx-music-source', file: 'huanyin/latest.js', branch: 'main',
+    rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/huanyin/latest.js',
+    jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/huanyin/latest.js'
+  },
+  {
+    id: 'flower', name: '野花音源', enabled: false,
+    repo: 'pdone/lx-music-source', file: 'flower/latest.js', branch: 'main',
+    rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/flower/latest.js',
+    jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/flower/latest.js'
+  },
+  {
+    id: 'grass', name: '野草音源', enabled: false,
+    repo: 'pdone/lx-music-source', file: 'grass/latest.js', branch: 'main',
+    rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/grass/latest.js',
+    jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/grass/latest.js'
+  },
+  {
+    id: 'juhe', name: '聚合 API 音源', enabled: true,
+    repo: 'pdone/lx-music-source', file: 'juhe/latest.js', branch: 'main',
+    rawUrl: 'https://raw.githubusercontent.com/pdone/lx-music-source/main/juhe/latest.js',
+    jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/pdone/lx-music-source@main/juhe/latest.js'
   }
 ]
 
@@ -122,7 +158,7 @@ export class LxSourceManager {
         entry.localVersion = meta.version ?? entry.localVersion
         const host = new LxScriptHost({ id: entry.id, name: meta.name ?? entry.name, version: meta.version })
         host.run(code)
-        await host.waitInited(6000)
+        await host.waitInited(20000)
         this.hosts.set(entry.id, host)
         ok.push(entry.id)
       } catch (e) {
@@ -198,7 +234,7 @@ export class LxSourceManager {
       const meta = parseScriptMeta(code)
       const host = new LxScriptHost({ id: entry.id, name: meta.name ?? entry.name, version: meta.version })
       host.run(code)
-      await host.waitInited(6000)
+      await host.waitInited(20000)
       this.hosts.set(id, host)
       entry.localVersion = meta.version ?? entry.localVersion
       entry.remoteDate = new Date().toISOString()
@@ -238,7 +274,7 @@ export class LxSourceManager {
       const entry: LxSourceEntry = { id, name: name || meta.name || '自定义音源', rawUrl: url, enabled: true, localVersion: meta.version }
       const host = new LxScriptHost({ id, name: entry.name, version: meta.version })
       host.run(code)
-      await host.waitInited(6000)
+      await host.waitInited(20000)
       this.hosts.set(id, host)
       this.entries.push(entry)
       this.resolveOrder.push('lx:' + id)
@@ -257,7 +293,7 @@ export class LxSourceManager {
       const meta = parseScriptMeta(code)
       const host = new LxScriptHost({ id: entry.id, name: meta.name ?? entry.name, version: meta.version })
       host.run(code)
-      await host.waitInited(6000)
+      await host.waitInited(20000)
       this.hosts.set(id, host)
       return { ok: true, detail: '已重载' }
     } catch (e) {

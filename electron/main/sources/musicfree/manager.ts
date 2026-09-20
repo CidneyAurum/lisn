@@ -44,7 +44,7 @@ export const DEFAULT_MF_SOURCES: MfSourceEntry[] = [
     jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/Huibq/keep-alive@master/Music_Free/xiaoyun.js'
   },
   {
-    id: 'xiaomi', name: '小蜜音乐（咪咕）', platform: 'mg', enabled: false,
+    id: 'xiaomi', name: '小蜜音乐（咪咕）', platform: 'mg', enabled: true,
     file: 'Music_Free/xiaomi.js', repo: 'Huibq/keep-alive', branch: 'master',
     rawUrl: 'https://raw.githubusercontent.com/Huibq/keep-alive/master/Music_Free/xiaomi.js',
     jsdelivrUrl: 'https://fastly.jsdelivr.net/gh/Huibq/keep-alive@master/Music_Free/xiaomi.js'

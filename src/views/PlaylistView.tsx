@@ -54,6 +54,15 @@ export function PlaylistView(): JSX.Element {
   const quality = useStore(s => s.quality)
   const showToast = useStore(s => s.showToast)
   const refreshPlaylists = useStore(s => s.refreshPlaylists)
+  const customId = playlist?.kind === 'custom' ? playlist.id : null
+  // Keep this hook unconditional when switching between daily and custom playlists.
+  const coverPicker = useCoverPicker(async dataUrl => {
+    if (!customId) return
+    if (!dataUrl) { showToast('封面处理失败,请换张图'); return }
+    const r = await window.glass.plSetCover(customId, dataUrl)
+    showToast(r.detail)
+    await refreshPlaylists()
+  })
 
   if (!playlist) return <div className="empty-state">歌单不存在</div>
 
@@ -63,13 +72,6 @@ export function PlaylistView(): JSX.Element {
     if (!pl) return <div className="empty-state">歌单不存在或已删除</div>
 
     const playAll = () => { if (pl.songs.length) void play(pl.songs[0], pl.songs) }
-
-    const coverPicker = useCoverPicker(async dataUrl => {
-      if (!dataUrl) { showToast('封面处理失败,请换张图'); return }
-      const r = await window.glass.plSetCover(pl.id, dataUrl)
-      showToast(r.detail)
-      await refreshPlaylists()
-    })
 
     const downloadAll = async () => {
       for (const s of pl.songs.slice(0, 5)) await window.glass.enqueue(s, quality)

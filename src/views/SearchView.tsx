@@ -7,7 +7,6 @@ const HOT = ['周杰伦', '晴天', '林俊杰', '邓紫棋', '海阔天空', '�
 
 export function SearchView(): JSX.Element {
   const keyword = useStore(s => s.keyword)
-  const setKeyword = useStore(s => s.setKeyword)
   const results = useStore(s => s.results)
   const searching = useStore(s => s.searching)
   const searched = useStore(s => s.searched)
@@ -26,7 +25,7 @@ export function SearchView(): JSX.Element {
     results.forEach(r => r.origins.forEach(o => set.add(o.platform)))
     return Array.from(set)
   }, [results])
-  const filtered = srcFilter === 'all' ? results : results.filter(r => r.origins.some(o => o.platform === srcFilter))
+  const filtered = useMemo(() => srcFilter === 'all' ? results : results.filter(r => r.origins.some(o => o.platform === srcFilter)), [results, srcFilter])
   const PLAT_LABEL: Record<string, string> = { wy: '网易', kw: '酷我', kg: '酷狗', tx: 'Q音', mg: '咪咕' }
 
   return (

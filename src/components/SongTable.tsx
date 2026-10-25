@@ -1,5 +1,5 @@
 import { Play, Download, Music4, Plus, Check, X, ListMusic } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { Song } from '../types'
 import { useStore } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -95,39 +95,32 @@ export function AddToPlaylistDialog({ song, onClose }: { song: Song; onClose: ()
   )
 }
 
-export function SongTable({ songs }: { songs: Song[] }): JSX.Element {
-  const play = useStore(s => s.play)
-  const results = useStore(s => s.results)
-  const current = useStore(s => s.current)
-  const playing = useStore(s => s.playing)
-  const quality = useStore(s => s.quality)
-  const showToast = useStore(s => s.showToast)
-  const [plSong, setPlSong] = useState<Song | null>(null)
-
-  const doDownload = async (song: Song) => {
-    await window.glass.enqueue(song, quality)
-    showToast('已加入下载队列：' + song.name)
+const SongRow = memo(function SongRow({ song, index, queueRef, quality, onAdd }: {
+  song: Song; index: number; queueRef: MutableRefObject<Song[]>; quality: string; onAdd: (song: Song) => void
+}) {
+  const isCurrent = useStore(s => s.current?.key === song.key)
+  const playing = useStore(s => s.current?.key === song.key && s.playing)
+  const play = () => { void useStore.getState().play(song, queueRef.current) }
+  const download = async () => {
+    try {
+      await window.glass.enqueue(song, quality)
+      useStore.getState().showToast('已加入下载队列：' + song.name)
+    } catch { useStore.getState().showToast('加入下载队列失败，请重试') }
   }
-
   return (
-    <div className="song-list" onClick={() => setPlSong(null)}>
-      {songs.map((song, i) => {
-        const isCurrent = current?.key === song.key
-        return (
           <div
-            key={song.key}
             className={'song-row' + (isCurrent ? ' playing' : '')}
-            onDoubleClick={() => void play(song, results)}
+            onDoubleClick={e => { if (!(e.target as HTMLElement).closest('button')) play() }}
           >
             <div className="song-idx">
               {isCurrent && playing ? (
                 <div className="eq"><span /><span /><span /></div>
               ) : (
-                String(i + 1).padStart(2, '0')
+                String(index + 1).padStart(2, '0')
               )}
             </div>
             <div className="song-cover">
-              {song.picUrl ? <img src={song.picUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music4 size={16} />}
+              {song.picUrl ? <img src={song.picUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music4 size={16} />}
             </div>
             <div>
               <div className="song-name">{song.name}</div>
@@ -136,31 +129,40 @@ export function SongTable({ songs }: { songs: Song[] }): JSX.Element {
             <div className="song-album">{song.album || '—'}</div>
             <div className="row" style={{ gap: 5, flexWrap: 'wrap' }}>
               {song.origins.slice(0, 4).map(o => (
-                <span key={o.platform + o.songId} className={'src-badge plat-' + o.platform}>
+                <span key={o.providerId + ':' + o.platform + ':' + o.songId} className={'src-badge plat-' + o.platform}>
                   {o.platform}
                 </span>
               ))}
             </div>
             <div className="song-actions">
-              <button className="icon-btn accent" title="播放" onClick={() => void play(song, results)}>
+              <button className="icon-btn accent" title="播放" onClick={play}>
                 <Play size={15} fill="currentColor" />
               </button>
-              <button className="icon-btn accent" title="加入歌单" onClick={e => { e.stopPropagation(); setPlSong(song) }}>
+              <button className="icon-btn accent" title="加入歌单" onClick={e => { e.stopPropagation(); onAdd(song) }}>
                 <Plus size={15} />
               </button>
-              <button className="icon-btn accent" title={'下载 ' + quality.toUpperCase()} onClick={() => void doDownload(song)}>
+              <button className="icon-btn accent" title={'下载 ' + quality.toUpperCase()} onClick={() => void download()}>
                 <Download size={15} />
               </button>
             </div>
           </div>
-        )
-      })}
+  )
+})
+
+export const SongTable = memo(function SongTable({ songs }: { songs: Song[] }): JSX.Element {
+  const quality = useStore(s => s.quality)
+  const [plSong, setPlSong] = useState<Song | null>(null)
+  const queueRef = useRef(songs)
+  queueRef.current = songs
+  return (
+    <div className="song-list" onClick={() => setPlSong(null)}>
+      {songs.map((song, index) => <SongRow key={song.key} song={song} index={index} queueRef={queueRef} quality={quality} onAdd={setPlSong} />)}
       <AnimatePresence>
         {plSong && <AddToPlaylistDialog song={plSong} onClose={() => setPlSong(null)} />}
       </AnimatePresence>
     </div>
   )
-}
+})
 
 export function SearchSkeleton({ n = 7 }: { n?: number }): JSX.Element {
   return (

@@ -7,6 +7,7 @@ import os from 'node:os'
 import { SourceRegistry } from '../electron/main/sources/registry'
 import { LxSourceManager } from '../electron/main/sources/lx-runner/manager'
 import { MusicFreeManager } from '../electron/main/sources/musicfree/manager'
+import { mergeSearchPage } from '../src/utils/playerState'
 
 process.on('unhandledRejection', r => console.log('  (拦截:', String(r).slice(0, 60) + ')'))
 
@@ -27,15 +28,17 @@ async function main(): Promise<void> {
 
   console.log('\n=== [2] 分页搜索「周杰伦」===')
   const p1 = await registry.search('周杰伦', 1)
-  console.log('第1页累计:', p1.songs.length, '条 | hasMore:', p1.hasMore)
+  console.log('第1页:', p1.songs.length, '条 | hasMore:', p1.hasMore)
   const p2 = await registry.search('周杰伦', 2)
-  console.log('第2页累计:', p2.songs.length, '条 | hasMore:', p2.hasMore)
+  console.log('第2页:', p2.songs.length, '条 | hasMore:', p2.hasMore)
   const p3 = await registry.search('周杰伦', 3)
-  console.log('第3页累计:', p3.songs.length, '条 | hasMore:', p3.hasMore)
+  console.log('第3页:', p3.songs.length, '条 | hasMore:', p3.hasMore)
+  const firstTwo = mergeSearchPage(p1.songs, p2.songs)
+  const allSongs = mergeSearchPage(firstTwo, p3.songs)
 
   console.log('\n=== [3] 平台覆盖 ===')
   const platCount: Record<string, number> = {}
-  for (const s of p3.songs) for (const o of s.origins) platCount[o.platform] = (platCount[o.platform] ?? 0) + 1
+  for (const s of allSongs) for (const o of s.origins) platCount[o.platform] = (platCount[o.platform] ?? 0) + 1
   console.log('平台分布:', JSON.stringify(platCount))
 
   console.log('\n=== [4] VIP 曲解析验证（多平台试一首）===')
@@ -49,9 +52,9 @@ async function main(): Promise<void> {
   } catch (e) { console.log('解析失败:', String(e).slice(0, 120)) }
 
   console.log('\n========== 搜索完整性结果 ==========')
-  console.log('GD翻页:', p2.songs.length > p1.songs.length ? '✅ (' + p1.songs.length + '→' + p2.songs.length + ')' : '❌')
+  console.log('GD翻页:', firstTwo.length > p1.songs.length ? '✅ (' + p1.songs.length + '→' + firstTwo.length + ')' : '❌')
   console.log('MusicFree加载:', mfR.ok.length > 0 ? '✅ (' + mfR.ok.join(',') + ')' : '❌')
-  console.log('结果规模:', p3.songs.length >= 150 ? '✅ ' + p3.songs.length + '条' : '⚠ ' + p3.songs.length + '条（偏少）')
+  console.log('结果规模:', allSongs.length >= 150 ? '✅ ' + allSongs.length + '条' : '⚠ ' + allSongs.length + '条（偏少）')
   fs.rmSync(dir, { recursive: true, force: true })
 }
 main().then(() => process.exit(0), e => { console.error('FAILED:', e); process.exit(1) })

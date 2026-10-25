@@ -1,7 +1,7 @@
 {
   "name": "lisn",
   "productName": "LISN",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "聆 LISN — 你的音乐，由此展开 · GitHub 免费音源聚合播放/下载",
   "main": "out/main/index.js",
   "author": "glass-music",
@@ -10,7 +10,9 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "start": "electron-vite preview",
-    "smoke:sources": "node scripts/smoke-sources.mjs",
+    "test": "tsx --test scripts/registry.test.ts scripts/mediaServer.test.ts src/utils/playerState.test.ts",
+    "test:ui": "node scripts/ui-regression.mjs",
+    "smoke:sources": "tsx scripts/smoke-sources.ts",
     "dist": "electron-vite build && electron-builder --win",
     "smoke:all": "tsx scripts/smoke-sources.ts && tsx scripts/smoke-lyric.ts && tsx scripts/smoke-mf.ts"
   },

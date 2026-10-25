@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Search, CalendarDays, Shuffle, Compass, Play, Loader2, ChevronRight, Plus, ListMusic } from 'lucide-react'
 import { useStore } from '../stores/store'
 
@@ -41,14 +41,20 @@ export function DiscoverView(): JSX.Element {
   const searchHistory = useStore(s => s.searchHistory)
   const clearSearchHistory = useStore(s => s.clearSearchHistory)
   const [dailyLoading, setDailyLoading] = useState(false)
+  const recommendationRequest = useRef(0)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const today = new Date()
   const g = greeting()
 
-  useEffect(() => { void useStore.getState().refreshPlaylists() }, [])
+  useEffect(() => {
+    void useStore.getState().refreshPlaylists()
+    return () => { recommendationRequest.current++ }
+  }, [])
 
   const openDaily = async () => {
+    if (dailyLoading) return
+    const request = ++recommendationRequest.current
     setDailyLoading(true)
     try {
       const kws = dailyKeywords()
@@ -56,6 +62,7 @@ export function DiscoverView(): JSX.Element {
       const seen = new Set<string>()
       for (const k of kws) {
         const r = await window.glass.search(k, 1)
+        if (request !== recommendationRequest.current) return
         for (const s of r.songs) {
           if (!seen.has(s.key)) { seen.add(s.key); merged.push(s) }
         }
@@ -66,19 +73,22 @@ export function DiscoverView(): JSX.Element {
       useStore.setState({
         playlist: { kind: 'agg', title: '每日推荐 · ' + dateStr, sub: '根据今天日期为你轮换的 ' + kws.join(' / ') + ' 精选', keyword: kws.join(' '), songs: merged.slice(0, 50) }
       })
-    } finally { setDailyLoading(false) }
+    } catch { useStore.getState().showToast('每日推荐加载失败，请重试') }
+    finally { setDailyLoading(false) }
   }
 
   const startRoaming = async () => {
-    const pool = playlists.length ? HOT_CHIPS : HOT_CHIPS
-    const kw = pool[Math.floor(Math.random() * pool.length)]
-    const r = await window.glass.search(kw, 1)
-    if (!r.songs.length) { useStore.getState().showToast('漫游暂时没有结果，再试一次'); return }
-    const song = r.songs[Math.floor(Math.random() * Math.min(r.songs.length, 20))]
-    useStore.setState({ keyword: kw, results: r.songs, searched: true })
+    const request = ++recommendationRequest.current
+    const keyword = HOT_CHIPS[Math.floor(Math.random() * HOT_CHIPS.length)]
+    await doSearch(keyword)
+    const state = useStore.getState()
+    if (request !== recommendationRequest.current || state.keyword !== keyword || state.searching) return
+    const songs = state.results
+    if (!songs.length) { state.showToast('漫游暂时没有结果，再试一次'); return }
+    const song = songs[Math.floor(Math.random() * Math.min(songs.length, 20))]
     setView('search')
     useStore.getState().showToast('私人漫游：' + song.name + ' · ' + song.artist)
-    await useStore.getState().play(song, r.songs)
+    await useStore.getState().play(song, songs)
   }
 
   const createPlaylist = async () => {
@@ -107,13 +117,12 @@ export function DiscoverView(): JSX.Element {
             onChange={e => setKw(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && kw.trim()) {
-                useStore.setState({ keyword: kw.trim(), searched: true, results: [] })
                 void doSearch(kw.trim())
                 setView('search')
               }
             }}
           />
-          <button className="icon-btn" onClick={() => { if (kw.trim()) { useStore.setState({ keyword: kw.trim(), searched: true, results: [] }); void doSearch(kw.trim()); setView('search') } }}>
+          <button className="icon-btn" onClick={() => { if (kw.trim()) { void doSearch(kw.trim()); setView('search') } }}>
             <ChevronRight size={16} />
           </button>
         </div>
@@ -229,7 +238,7 @@ export function DiscoverView(): JSX.Element {
       </div>
       <div className="hot-chips" style={{ justifyContent: 'flex-start', marginBottom: 30 }}>
         {HOT_CHIPS.map(h => (
-          <button key={h} className="chip" onClick={() => { useStore.setState({ keyword: h, searched: true, results: [] }); void doSearch(h); setView('search') }}>{h}</button>
+          <button key={h} className="chip" onClick={() => { void doSearch(h); setView('search') }}>{h}</button>
         ))}
       </div>
 

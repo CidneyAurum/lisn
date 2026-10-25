@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Song, DownloadItem, SourcesSnapshot, Settings, LibraryFile, UserPlaylist } from '../types'
+import { LatestRequest, applySongCovers, mergeSearchPage, queueIndex, waitForMetadata } from '../utils/playerState'
 
 export type View = 'discover' | 'search' | 'playlist' | 'downloads' | 'library' | 'sources' | 'settings'
 
@@ -61,6 +62,7 @@ interface AppState extends PlayerState {
   sleepTimerAt: number | null
   setSleepTimer: (minutes: number) => void
   setPlaying: (p: boolean) => void
+  pause: () => void
   playLocalFile: (filePath: string, name: string, artist: string) => Promise<void>
   togglePlay: () => Promise<void>
   setQuality: (q: '128k' | '320k' | 'flac') => void
@@ -76,7 +78,10 @@ interface AppState extends PlayerState {
 
 // 模块级 <audio> 单例
 let audioEl: HTMLAudioElement | null = null
-let playToken = 0
+const playbackRequest = new LatestRequest()
+let searchToken = 0
+let wantsPlayback = false
+let loadedSongKey: string | null = null
 export function getAudio(): HTMLAudioElement {
   if (!audioEl) {
     audioEl = new Audio()
@@ -86,6 +91,95 @@ export function getAudio(): HTMLAudioElement {
 }
 
 const picPending = new Set<string>()
+const picQueue = new Map<string, Song>()
+const readyPics = new Map<string, string>()
+let picWorkers = 0
+let picFlushTimer: ReturnType<typeof setTimeout> | null = null
+
+function relevantSong(key: string): boolean {
+  const state = useStore.getState()
+  return state.current?.key === key || state.results.some(song => song.key === key) || state.queue.some(song => song.key === key)
+}
+
+function flushPics(): void {
+  picFlushTimer = null
+  const covers = new Map(readyPics)
+  readyPics.clear()
+  const state = useStore.getState()
+  const results = applySongCovers(state.results, covers)
+  const queue = applySongCovers(state.queue, covers)
+  const current = state.current && !state.current.picUrl && covers.has(state.current.key)
+    ? { ...state.current, picUrl: covers.get(state.current.key) }
+    : state.current
+  if (results !== state.results || queue !== state.queue || current !== state.current) {
+    useStore.setState({ results, queue, current })
+  }
+}
+
+function pumpPics(): void {
+  while (picWorkers < 4 && picQueue.size) {
+    const [key, song] = picQueue.entries().next().value!
+    picQueue.delete(key)
+    if (!relevantSong(key)) { picPending.delete(key); continue }
+    picWorkers++
+    void window.glass.pic(song).then(pic => {
+      if (pic && relevantSong(key)) {
+        readyPics.set(key, pic)
+        picFlushTimer ??= setTimeout(flushPics, 50)
+      }
+    }).catch(() => {}).finally(() => {
+      picPending.delete(key)
+      picWorkers--
+      pumpPics()
+    })
+  }
+}
+
+function beginPlayback(): AbortSignal {
+  const signal = playbackRequest.begin()
+  wantsPlayback = true
+  resetRecovery()
+  markIntentionalLoad()
+  getAudio().pause()
+  return signal
+}
+
+async function resolveStream(song: Song): Promise<{ streamUrl: string; resolveInfo: PlayerState['resolveInfo']; crossPlatform?: boolean }> {
+  if (song.key.startsWith('local:')) {
+    return { streamUrl: await window.glass.localStreamUrl(song.key.slice(6)), resolveInfo: null }
+  }
+  const state = useStore.getState()
+  const result = await window.glass.resolve(song, state.quality, state.pinnedSourceId) as Awaited<ReturnType<typeof window.glass.resolve>> & { note?: string; crossPlatform?: boolean }
+  return {
+    streamUrl: result.streamUrl,
+    resolveInfo: { providerId: result.providerId, platform: result.platform, quality: result.quality, note: result.note },
+    crossPlatform: result.crossPlatform
+  }
+}
+
+async function loadStream(song: Song, url: string, signal: AbortSignal, resumeAt = 0): Promise<boolean> {
+  if (!playbackRequest.isCurrent(signal)) return false
+  const audio = getAudio()
+  markIntentionalLoad()
+  const metadata = resumeAt > 0 ? waitForMetadata(audio, signal) : null
+  loadedSongKey = song.key
+  audio.loop = useStore.getState().playMode === 'one'
+  audio.src = url
+  if (metadata && !await metadata) {
+    if (!playbackRequest.isCurrent(signal)) return false
+    throw new Error('音频元数据加载失败')
+  }
+  if (!playbackRequest.isCurrent(signal)) return false
+  if (resumeAt > 0) {
+    try { audio.currentTime = Number.isFinite(audio.duration) ? Math.min(resumeAt, Math.max(0, audio.duration - 0.1)) : resumeAt } catch { /* 流不支持 seek */ }
+  }
+  await audio.play()
+  if (!playbackRequest.isCurrent(signal)) return false
+  lastPosSec = audio.currentTime
+  lastPosChangeAt = Date.now()
+  stallStart = 0
+  return true
+}
 
 export const useStore = create<AppState>((set, get) => ({
   view: 'discover',
@@ -125,7 +219,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   doSearch: async (kw) => {
     const keyword = (kw ?? get().keyword).trim()
-    if (!keyword || get().searching) return
+    if (!keyword || (get().searching && get().keyword === keyword)) return
+    const token = ++searchToken
     {
       // 搜索历史:去重置顶,最多 30 条
       const hist = get().searchHistory.filter(h => h !== keyword)
@@ -134,12 +229,14 @@ export const useStore = create<AppState>((set, get) => ({
       set({ searchHistory: clipped })
       try { localStorage.setItem('lisn-search-history', JSON.stringify(clipped)) } catch { /* 配额 */ }
     }
-    set({ searching: true, searched: true, keyword, error: null, results: [], page: 1, hasMore: false })
+    set({ searching: true, loadingMore: false, searched: true, keyword, error: null, results: [], page: 1, hasMore: false })
     try {
       const r = await window.glass.search(keyword, 1)
+      if (token !== searchToken) return
       set({ results: r.songs, searching: false, hasMore: r.hasMore, page: 1 })
       get().ensurePics(r.songs)
     } catch (e) {
+      if (token !== searchToken) return
       set({ searching: false, results: [], error: e instanceof Error ? e.message : String(e) })
     }
   },
@@ -147,67 +244,62 @@ export const useStore = create<AppState>((set, get) => ({
   loadMore: async () => {
     const st = get()
     if (!st.keyword || st.searching || st.loadingMore || !st.hasMore) return
+    const token = searchToken
     set({ loadingMore: true })
     try {
       const r = await window.glass.search(st.keyword, st.page + 1)
-      set({ results: r.songs, loadingMore: false, hasMore: r.hasMore, page: r.page })
+      if (token !== searchToken) return
+      const results = mergeSearchPage(get().results, r.songs)
+      set({ results, loadingMore: false, hasMore: r.hasMore, page: r.page })
+      get().ensurePics(r.songs)
     } catch (e) {
+      if (token !== searchToken) return
       set({ loadingMore: false, hasMore: false })
     }
   },
 
   ensurePics: (songs) => {
-    let i = 0
-    for (const s of songs.slice(0, 60)) {
-      if (s.picUrl || picPending.has(s.key)) continue
-      picPending.add(s.key)
-      const delay = 120 * (i++)
-      setTimeout(async () => {
-        try {
-          const pic = await window.glass.pic(s)
-          if (pic) {
-            const { results, queue } = get()
-            const patch = (arr: Song[]) => arr.map(x => (x.key === s.key ? { ...x, picUrl: pic } : x))
-            set({ results: patch(results), queue: patch(queue) })
-            const cur = get().current
-            if (cur?.key === s.key) set({ current: { ...cur, picUrl: pic } })
-          }
-        } catch { /* ignore */ } finally { picPending.delete(s.key) }
-      }, delay)
+    // Drop covers queued by obsolete searches before adding the next visible page.
+    for (const key of picQueue.keys()) {
+      if (!relevantSong(key)) { picQueue.delete(key); picPending.delete(key) }
     }
+    for (const s of songs.slice(0, 60)) {
+      if (s.picUrl || s.key.startsWith('local:') || picPending.has(s.key) || readyPics.has(s.key)) continue
+      picPending.add(s.key)
+      picQueue.set(s.key, s)
+    }
+    pumpPics()
   },
 
   play: async (song, list) => {
     const st = get()
-    const queue = list ?? st.results
-    const idx = queue.findIndex(x => x.key === song.key)
-    // 播放序号:快速切歌时,过期请求的结果一律丢弃(避免旧请求的 AbortError 误报解析失败)
-    const token = ++playToken
+    const candidates = list ?? (st.queue.some(item => item.key === song.key) ? st.queue : st.results)
+    const queue = candidates.some(item => item.key === song.key) ? candidates : [song]
+    const idx = queue.findIndex(item => item.key === song.key)
+    const signal = beginPlayback()
+    lastPosSec = 0
+    lastPosChangeAt = 0
+    stallStart = 0
     set({
       current: song, playing: false, loading: true, error: null, manualBlocked: null,
-      queue, queueIdx: idx >= 0 ? idx : st.queueIdx
+      streamUrl: null, resolveInfo: null, queue, queueIdx: idx
     })
     get().ensurePics([song])
     try {
-      const res = await window.glass.resolve(song, st.quality, st.pinnedSourceId)
-      if (token !== playToken) return // 已被更新的播放请求取代
-      const audio = getAudio()
-      audio.loop = st.playMode === 'one'
-      markIntentionalLoad()
-      audio.src = res.streamUrl
-      await audio.play()
-      if (token !== playToken) return
-      set({ streamUrl: res.streamUrl, playing: true, loading: false, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality, note: (res as any).note } })
-      if ((res as any).crossPlatform) get().showToast('原平台无可用源,已用' + ((res as any).note ?? '跨平台音源') + '播放')
+      const res = await resolveStream(song)
+      if (!await loadStream(song, res.streamUrl, signal)) return
+      set({ streamUrl: res.streamUrl, playing: true, loading: false, resolveInfo: res.resolveInfo })
+      if (res.crossPlatform) get().showToast('原平台无可用源,已用' + (res.resolveInfo?.note ?? '跨平台音源') + '播放')
     } catch (e: any) {
-      if (token !== playToken) return // 过期请求的失败(含 play() 被新加载打断)忽略
+      if (!playbackRequest.isCurrent(signal)) return
+      wantsPlayback = false
       const msg = String(e?.message ?? e)
       // play() 被新的加载请求打断属于正常竞态,不是解析失败
       if (e?.name === 'AbortError' || msg.includes('interrupted by a new load request')) {
-        set({ loading: false })
+        set({ playing: false, loading: false })
         return
       }
-      if (msg.includes('manual-blocked')) {
+      if (e?.code === 'manual-blocked' || msg.includes('manual-blocked') || msg.includes('锁定音源解析失败') || msg.includes('指定音源不存在或未加载')) {
         set({ loading: false, manualBlocked: song, error: null })
       } else {
         set({ loading: false, playing: false, error: msg })
@@ -219,19 +311,13 @@ export const useStore = create<AppState>((set, get) => ({
   playNext: () => {
     const { queue, queueIdx, playMode } = get()
     if (!queue.length) return
-    let next = (queueIdx + 1) % queue.length
-    if (playMode === 'shuffle' && queue.length > 1) {
-      while (next === queueIdx) next = Math.floor(Math.random() * queue.length)
-    }
+    const next = queueIndex(queue.length, queueIdx, 1, playMode === 'shuffle')
     void get().play(queue[next], queue)
   },
   playPrev: () => {
     const { queue, queueIdx, playMode } = get()
     if (!queue.length) return
-    let prev = (queueIdx - 1 + queue.length) % queue.length
-    if (playMode === 'shuffle' && queue.length > 1) {
-      while (prev === queueIdx) prev = Math.floor(Math.random() * queue.length)
-    }
+    const prev = queueIndex(queue.length, queueIdx, -1, playMode === 'shuffle')
     void get().play(queue[prev], queue)
   },
 
@@ -245,7 +331,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (w.__sleepTimer) { clearTimeout(w.__sleepTimer); w.__sleepTimer = null }
     if (minutes > 0) {
       w.__sleepTimer = setTimeout(() => {
-        getAudio().pause()
+        get().pause()
         set({ sleepTimerAt: null })
         const id = Date.now()
         set({ toast: { id, msg: '睡眠时间到,已暂停播放' } })
@@ -265,57 +351,62 @@ export const useStore = create<AppState>((set, get) => ({
     if (s) { const nextSettings = { ...s, playMode: next }; set({ settings: nextSettings }); void window.glass.patchSettings({ playMode: next }) }
   },
   setPlaying: (p) => set({ playing: p }),
+  pause: () => {
+    wantsPlayback = false
+    playbackRequest.cancel()
+    resetRecovery()
+    markIntentionalLoad()
+    getAudio().pause()
+    set({ playing: false, loading: false })
+  },
   /** 本地文件播放:更新 current(此前遗漏导致歌词/封面串到上一首在线歌曲) */
   playLocalFile: async (filePath: string, name: string, artist: string) => {
-    const url = await window.glass.localStreamUrl(filePath)
-    const audio = getAudio()
     const song: Song = { key: 'local:' + filePath, name, artist, origins: [] }
-    set({ current: song, queue: [song], queueIdx: 0, playing: false, loading: false, error: null, resolveInfo: null, manualBlocked: null })
-    markIntentionalLoad()
-    audio.loop = get().playMode === 'one'
-    audio.src = url
-    try {
-      await audio.play()
-      set({ playing: true, streamUrl: url })
-    } catch {
-      set({ playing: false, error: '本地文件播放失败' })
-      get().showToast('本地文件播放失败')
-    }
+    await get().play(song, [song])
   },
   togglePlay: async () => {
     const audio = getAudio()
-    if (!audio.paused) { audio.pause(); return }
+    if (wantsPlayback || !audio.paused) { get().pause(); return }
+    const st = get()
+    if (!st.current) return
+    if (!audio.src || loadedSongKey !== st.current.key) {
+      await get().play(st.current, st.queue)
+      return
+    }
+    const signal = beginPlayback()
     try {
       await audio.play()
+      if (playbackRequest.isCurrent(signal)) {
+        lastPosChangeAt = Date.now()
+        stallStart = 0
+        set({ playing: true, loading: false, error: null })
+      }
     } catch {
+      if (!playbackRequest.isCurrent(signal)) return
       // 流已过期/失效(免费源链接有时效):重新解析并断点续播
-      const st = get()
-      if (!st.current) return
       const resumeAt = Math.max(0, audio.currentTime)
+      set({ loading: true })
       get().showToast('播放流已失效,正在重新解析…')
       try {
-        const res = await window.glass.resolve(st.current, st.quality, st.pinnedSourceId)
-        markIntentionalLoad()
-        audio.src = res.streamUrl
-        await new Promise<void>(r => {
-          const f = () => { audio.removeEventListener('loadedmetadata', f); r() }
-          audio.addEventListener('loadedmetadata', f)
-          setTimeout(r, 4000)
-        })
-        try { if (resumeAt > 1) audio.currentTime = resumeAt } catch { /* 流不支持 seek */ }
-        await audio.play()
-        set({ playing: true, streamUrl: res.streamUrl, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
+        const res = await resolveStream(st.current)
+        if (!await loadStream(st.current, res.streamUrl, signal, resumeAt)) return
+        set({ playing: true, loading: false, streamUrl: res.streamUrl, resolveInfo: res.resolveInfo })
         get().showToast('已恢复播放')
       } catch {
-        set({ playing: false, error: '恢复播放失败' })
+        if (!playbackRequest.isCurrent(signal)) return
+        wantsPlayback = false
+        set({ playing: false, loading: false, error: '恢复播放失败' })
         get().showToast('恢复播放失败,请尝试切下一首')
       }
     }
   },
   setQuality: (q) => {
+    if (get().quality === q) return
     set({ quality: q })
-    const cur = get().current
-    if (cur) void get().play(cur)
+    const { current, queue, settings } = get()
+    if (settings) set({ settings: { ...settings, quality: q } })
+    void window.glass.patchSettings({ quality: q }).catch(() => {})
+    if (current && !current.key.startsWith('local:')) void get().play(current, queue)
   },
   setPinnedSource: (id) => {
     set({ pinnedSourceId: id })
@@ -341,7 +432,9 @@ export const useStore = create<AppState>((set, get) => ({
 
 // 队列持久化:重启后保留队列与当前曲(streamUrl 不持久,点播放自动重新解析)
 useStore.subscribe((s, p) => {
-  if (s.current && (s.current !== p.current || s.queueIdx !== p.queueIdx)) {
+  const queueChanged = s.queue !== p.queue && (s.queue.length !== p.queue.length || s.queue.some((song, index) =>
+    song.key !== p.queue[index]?.key || song.origins !== p.queue[index]?.origins))
+  if (s.current && (s.current.key !== p.current?.key || queueChanged || s.queueIdx !== p.queueIdx)) {
     try { localStorage.setItem('lisn-lastplay', JSON.stringify({ queue: s.queue.slice(0, 300), queueIdx: s.queueIdx, current: s.current })) } catch { /* 配额 */ }
   }
 })
@@ -353,12 +446,22 @@ useStore.subscribe((s, p) => {
 
 // ---- 播放中断自愈:设备切换/流断开/其它应用抢占后,原地重解析并断点续播 ----
 let recoverAttempt = 0
-let recoverBusy = false
+let recoverInFlight: AbortSignal | null = null
 let intentionalLoadUntil = 0
 let lastPosSec = 0
 let stallStart = 0
 let lastPosChangeAt = 0
 let stableTimer: ReturnType<typeof setTimeout> | null = null
+let recoverTimer: ReturnType<typeof setTimeout> | null = null
+
+function resetRecovery(): void {
+  recoverAttempt = 0
+  recoverInFlight = null
+  if (stableTimer) clearTimeout(stableTimer)
+  if (recoverTimer) clearTimeout(recoverTimer)
+  stableTimer = null
+  recoverTimer = null
+}
 
 export function markIntentionalLoad(): void {
   intentionalLoadUntil = Date.now() + 4000
@@ -371,74 +474,79 @@ function diag(msg: string): void {
 
 ;(() => {
   const a = getAudio()
+  a.addEventListener('play', () => {
+    if (!wantsPlayback) { a.pause(); return }
+    if (!a.paused && loadedSongKey === useStore.getState().current?.key) useStore.setState({ playing: true })
+  })
+  a.addEventListener('pause', () => {
+    if (a.paused) useStore.setState({ playing: false })
+  })
   a.addEventListener('timeupdate', () => {
     if (a.currentTime !== lastPosSec) lastPosChangeAt = Date.now()
     lastPosSec = a.currentTime
     stallStart = 0
   })
-  const recover = async (reason: string): Promise<void> => {
+  const recover = async (reason: string, signal = playbackRequest.signal, retry = false): Promise<void> => {
     const st = useStore.getState()
-    if (!st.current || !st.playing) return            // 非主动播放(换歌/暂停/初始失败)不干预
-    if (Date.now() < intentionalLoadUntil) return     // 主动换源引起的瞬态事件
-    if (recoverBusy) return
+    if (!st.current || loadedSongKey !== st.current.key || !wantsPlayback || !playbackRequest.isCurrent(signal)) return
+    if (!retry && st.loading) return
+    if (recoverInFlight === signal) return
     if (recoverAttempt >= 3) {
       recoverAttempt = 0
       useStore.getState().showToast('连续中断,已自动切换下一首')
       useStore.getState().playNext()
       return
     }
-    recoverBusy = true
+    recoverInFlight = signal
     recoverAttempt++
     const resumeAt = Math.max(0, lastPosSec - 1)
+    useStore.setState({ loading: true, playing: false })
     useStore.getState().showToast(`播放被打断,正在恢复(${recoverAttempt}/3)…`)
     try {
-      const res = await window.glass.resolve(st.current, st.quality, st.pinnedSourceId)
-      console.log('[自愈] 重解析成功,载入流', res.streamUrl?.slice(0, 60))
-      diag('recover#' + recoverAttempt + ' reason=' + reason + ' -> newUrl host=' + String(res.streamUrl).slice(0, 80))
-      const audio = getAudio()
-      markIntentionalLoad()
-      audio.src = res.streamUrl
-      await new Promise<void>(resolve => {
-        const onMeta = () => { console.log('[自愈] metadata 就绪'); audio.removeEventListener('loadedmetadata', onMeta); resolve() }
-        audio.addEventListener('loadedmetadata', onMeta)
-        setTimeout(() => { console.log('[自愈] metadata 超时,继续'); resolve() }, 4000)
-      })
-      try { audio.currentTime = resumeAt; console.log('[自愈] seek 到', resumeAt) } catch (e) { console.log('[自愈] seek 失败', String(e).slice(0, 80)) }
-      await audio.play()
-      console.log('[自愈] 恢复播放成功')
-      diag('recover#' + recoverAttempt + ' OK resumed at ' + audio.currentTime.toFixed(1))
-      useStore.setState({ playing: true, loading: false, streamUrl: res.streamUrl, resolveInfo: { providerId: res.providerId, platform: res.platform, quality: res.quality } })
+      const res = await resolveStream(st.current)
+      if (!await loadStream(st.current, res.streamUrl, signal, resumeAt)) return
+      diag('recover#' + recoverAttempt + ' reason=' + reason + ' OK resumed at ' + a.currentTime.toFixed(1))
+      useStore.setState({ playing: true, loading: false, streamUrl: res.streamUrl, resolveInfo: res.resolveInfo })
       if (stableTimer) clearTimeout(stableTimer)
-      stableTimer = setTimeout(() => { recoverAttempt = 0 }, 30000) // 稳定播 30s 后重置计数
+      stableTimer = setTimeout(() => { if (playbackRequest.isCurrent(signal)) recoverAttempt = 0 }, 30000)
     } catch (e) {
-      console.log('[自愈] 恢复失败:', String(e).slice(0, 120))
+      if (!playbackRequest.isCurrent(signal)) return
       diag('recover#' + recoverAttempt + ' FAIL ' + String(e).slice(0, 120))
-      setTimeout(() => { recoverBusy = false; void recover(reason + '+') }, 2000)
-      return
+      recoverTimer = setTimeout(() => {
+        recoverTimer = null
+        if (playbackRequest.isCurrent(signal)) void recover(reason + '+', signal, true)
+      }, 2000)
+    } finally {
+      if (recoverInFlight === signal) recoverInFlight = null
     }
-    recoverBusy = false
   }
   a.addEventListener('waiting', () => diag('waiting pos=' + a.currentTime.toFixed(1) + ' ready=' + a.readyState))
   a.addEventListener('playing', () => diag('playing pos=' + a.currentTime.toFixed(1)))
-  a.addEventListener('ended', () => diag('ended'))
+  a.addEventListener('ended', () => {
+    diag('ended')
+    const state = useStore.getState()
+    if (wantsPlayback && !a.loop && !state.loading && loadedSongKey === state.current?.key) state.playNext()
+  })
   a.addEventListener('emptied', () => diag('emptied'))
   a.addEventListener('error', () => {
     const st = useStore.getState()
     diag('ERROR code=' + (a.error?.code ?? '?') + ' msg=' + (a.error?.message ?? '') + ' pos=' + a.currentTime.toFixed(1) +
       ' ready=' + a.readyState + ' net=' + a.networkState + ' playing=' + st.playing + ' song=' + (st.current?.name ?? '-'))
-    if (a.src) void recover('error' + (a.error?.code ?? ''))
+    // Assigning a new src clears media.error. A queued error from the old source
+    // must not recover the new track; a genuine early failure must still recover.
+    if (a.src && a.error && loadedSongKey === st.current?.key) void recover('error' + a.error.code)
   })
   a.addEventListener('abort', () => {
     if (Date.now() < intentionalLoadUntil) return
     const st = useStore.getState()
-    if (st.current && st.playing) void recover('abort')
+    if (st.current && wantsPlayback) void recover('abort')
   })
   a.addEventListener('stalled', () => { stallStart = Date.now() })
   // 位置看门狗:播放中位置超过 8s 不前进(流挂起/无事件静默冻结)即判定卡死并自愈
   setInterval(() => {
     if (stallStart && Date.now() - stallStart > 10000) { stallStart = 0; void recover('stalled') }
     const st = useStore.getState()
-    if (!st.playing || st.loading) return
+    if (!wantsPlayback || st.loading || recoverTimer) return
     if (a.paused) return
     if (lastPosChangeAt && Date.now() - lastPosChangeAt > 8000) {
       lastPosChangeAt = Date.now() // 防重复触发

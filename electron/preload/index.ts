@@ -85,6 +85,7 @@ const api = {
     return () => ipcRenderer.removeListener('tray:control', listener)
   },
   limbusToggle: () => ipcRenderer.invoke('limbus:toggle') as Promise<boolean>,
+  limbusVisible: () => ipcRenderer.invoke('limbus:visible') as Promise<boolean>,
   overlaySetConfig: (cfg: unknown) => ipcRenderer.send('limbus:setConfig', cfg),
   onLimbusConfig: (cb: (cfg: any) => void) => {
     const l = (_e: unknown, cfg: any) => cb(cfg)

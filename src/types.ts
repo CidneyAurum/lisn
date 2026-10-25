@@ -176,6 +176,7 @@ export interface GlassApi {
   overlaySetConfig(cfg: unknown): void
   onLimbusConfig(cb: (cfg: unknown) => void): () => void
   limbusToggle(): Promise<boolean>
+  limbusVisible(): Promise<boolean>
   onOverlayRepush(cb: () => void): () => void
   onTrayControl(cb: (action: string) => void): () => void
   onSourcesChanged(cb: (snapshot: SourcesSnapshot) => void): () => void

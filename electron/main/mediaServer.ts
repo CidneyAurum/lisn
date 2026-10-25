@@ -2,9 +2,12 @@ import http from 'node:http'
 import fs from 'node:fs'
 import { UA } from './sources/spi'
 
-/** 上游无数据超过该毫秒数即判定卡死,自动断线重连续传 */
-const STALL_MS = 30_000
-const MAX_ATTEMPTS = 5
+export interface MediaServerOptions {
+  headerTimeoutMs?: number
+  stallTimeoutMs?: number
+  maxAttempts?: number
+  retryDelayMs?: number
+}
 
 interface StreamCtx {
   songJson?: string
@@ -12,7 +15,68 @@ interface StreamCtx {
   pinned?: string | null
 }
 
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+interface ByteRange { start?: number; end?: number; suffix?: number }
+interface ContentRange { start: number; end: number; total?: number }
+
+function parseRange(value: string): ByteRange | null {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(value.trim())
+  if (!match || (!match[1] && !match[2])) return null
+  const start = match[1] ? Number(match[1]) : undefined
+  const end = match[2] ? Number(match[2]) : undefined
+  if ([start, end].some(n => n !== undefined && !Number.isSafeInteger(n))) return null
+  if (start === undefined) return end! > 0 ? { suffix: end } : null
+  return end !== undefined && end < start ? null : { start, end }
+}
+
+function parseContentRange(value: string | null): ContentRange | null {
+  const match = /^bytes (\d+)-(\d+)\/(\d+|\*)$/i.exec(value ?? '')
+  if (!match) return null
+  const start = Number(match[1]); const end = Number(match[2])
+  const total = match[3] === '*' ? undefined : Number(match[3])
+  if (![start, end, total].every(n => n === undefined || Number.isSafeInteger(n)) || end < start || (total !== undefined && end >= total)) return null
+  return { start, end, total }
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('stream cancelled')
+}
+
+/** Observe cancellation even when a resolver cannot cancel its underlying work. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal))
+    if (signal.aborted) onAbort()
+    else signal.addEventListener('abort', onAbort, { once: true })
+    work.then(value => { signal.removeEventListener('abort', onAbort); resolve(value) }, error => {
+      signal.removeEventListener('abort', onAbort); reject(error)
+    })
+  })
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(abortReason(signal))
+  return new Promise((resolve, reject) => {
+    const onAbort = () => { clearTimeout(timer); reject(abortReason(signal)) }
+    const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve() }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function waitForDrain(res: http.ServerResponse, signal: AbortSignal): Promise<void> {
+  if (res.destroyed || signal.aborted) return Promise.reject(abortReason(signal))
+  if (!res.writableNeedDrain) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      res.removeListener('drain', onDrain); res.removeListener('close', onClose); res.removeListener('error', onError)
+      signal.removeEventListener('abort', onClose)
+    }
+    const onDrain = () => { cleanup(); resolve() }
+    const onError = (error: Error) => { cleanup(); reject(error) }
+    const onClose = () => { cleanup(); reject(abortReason(signal)) }
+    res.once('drain', onDrain); res.once('close', onClose); res.once('error', onError)
+    signal.addEventListener('abort', onClose, { once: true })
+  })
+}
 
 /** 按上游域名给出合理 Referer(部分 CDN 校验来源) */
 function refererFor(url: string): string {
@@ -29,9 +93,15 @@ function refererFor(url: string): string {
 
 export class MediaServer {
   private server: http.Server | null = null
+  private clients = new Set<AbortController>()
+  private readonly options: Required<MediaServerOptions>
   port = 0
   /** 上游反复失败时用于重新解析新地址(由 index.ts 注入 registry) */
   freshUrlProvider: ((songJson: string, quality: string, pinned: string | null) => Promise<string | null>) | null = null
+
+  constructor(options: MediaServerOptions = {}) {
+    this.options = { headerTimeoutMs: 20_000, stallTimeoutMs: 30_000, maxAttempts: 5, retryDelayMs: 300, ...options }
+  }
 
   async start(): Promise<void> {
     this.server = http.createServer((req, res) => {
@@ -41,8 +111,10 @@ export class MediaServer {
     this.server.requestTimeout = 0
     this.server.timeout = 0
     this.server.headersTimeout = 60_000
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve, reject) => {
+      this.server!.once('error', reject)
       this.server!.listen(0, '127.0.0.1', () => {
+        this.server!.removeListener('error', reject)
         this.port = (this.server!.address() as { port: number }).port
         resolve()
       })
@@ -78,26 +150,31 @@ export class MediaServer {
       return
     }
     if (u.pathname === '/local') {
-      const p = decodeURIComponent(u.searchParams.get('p') ?? '')
+      // URLSearchParams already decodes once; a literal '%' or '%20' is part of the filename.
+      const p = u.searchParams.get('p') ?? ''
       if (!/\.(mp3|flac|lrc)$/i.test(p) || !fs.existsSync(p)) { res.writeHead(404); res.end(); return }
       const stat = fs.statSync(p)
-      const range = req.headers.range
-      const ctype = p.endsWith('.flac') ? 'audio/flac' : 'audio/mpeg'
-      const m = range ? range.match(/bytes=(\d*)-(\d*)/) : null
-      if (m) {
-        const start = m[1] ? parseInt(m[1], 10) : 0
-        const end = m[2] ? Math.min(parseInt(m[2], 10), stat.size - 1) : stat.size - 1
-        res.writeHead(206, {
-          'Content-Type': ctype,
-          'Content-Range': 'bytes ' + start + '-' + end + '/' + stat.size,
-          'Content-Length': end - start + 1,
-          'Accept-Ranges': 'bytes'
-        })
-        fs.createReadStream(p, { start, end }).pipe(res)
-      } else {
-        res.writeHead(200, { 'Content-Type': ctype, 'Content-Length': stat.size, 'Accept-Ranges': 'bytes' })
-        fs.createReadStream(p).pipe(res)
+      if (!stat.isFile()) { res.writeHead(404); res.end(); return }
+      const ctype = /\.flac$/i.test(p) ? 'audio/flac' : /\.lrc$/i.test(p) ? 'text/plain; charset=utf-8' : 'audio/mpeg'
+      let start = 0; let end = stat.size - 1
+      if (req.headers.range) {
+        const range = parseRange(req.headers.range)
+        if (!range || !stat.size || (range.start !== undefined && range.start >= stat.size)) {
+          res.writeHead(416, { 'Content-Range': 'bytes */' + stat.size, 'Accept-Ranges': 'bytes' }); res.end(); return
+        }
+        start = range.suffix !== undefined ? Math.max(0, stat.size - range.suffix) : range.start!
+        end = Math.min(range.end ?? end, end)
       }
+      const headers: Record<string, string | number> = { 'Content-Type': ctype, 'Content-Length': Math.max(0, end - start + 1), 'Accept-Ranges': 'bytes' }
+      if (req.headers.range) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + stat.size
+      res.writeHead(req.headers.range ? 206 : 200, headers)
+      if (req.method === 'HEAD' || !stat.size) { res.end(); return }
+      const file = fs.createReadStream(p, { start, end })
+      const cancel = () => file.destroy()
+      res.once('close', cancel)
+      file.once('error', () => res.destroy())
+      file.once('close', () => res.removeListener('close', cancel))
+      file.pipe(res)
       return
     }
     res.writeHead(404); res.end()
@@ -105,113 +182,157 @@ export class MediaServer {
 
   /**
    * 无缝上游代理:上游断开/卡死时,用 Range 从已发送字节处续拉;
-   * 同一地址连续失败时重新解析换源。对播放器完全透明。
+   * 若重新解析改变地址,交给播放器按时间点恢复,避免拼接不同音频的字节。
    */
   private async proxyStream(target: string, req: http.IncomingMessage, res: http.ServerResponse, ctx: StreamCtx): Promise<void> {
     const clientRange = req.headers.range
+    const requestedRange = clientRange ? parseRange(clientRange) : undefined
+    if (clientRange && !requestedRange) { res.writeHead(416); res.end(); return }
+    const client = new AbortController()
+    const onClose = () => client.abort(new Error('client disconnected'))
+    this.clients.add(client)
+    req.once('aborted', onClose)
+    res.once('close', onClose)
     let url = target
     let sent = 0
+    let baseOffset = 0
+    let responseEnd: number | undefined
+    let expectedBytes: number | undefined
+    let totalSize: number | undefined
     let headersWritten = false
     let consecutiveSameUrlFails = 0
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const headers: Record<string, string> = {
-          'User-Agent': UA,
-          // 部分 CDN(网易云等)缺 Referer 会中途掐断长连接
-          Referer: refererFor(url),
-          Accept: '*/*'
-        }
-        if (sent > 0) headers.Range = 'bytes=' + sent + '-'
-        else if (clientRange) headers.Range = clientRange
-        const upstream = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(20_000) })
-        if (!upstream.ok && upstream.status !== 206) throw new Error('upstream status ' + upstream.status)
-        if (!upstream.body) throw new Error('upstream no body')
-        // 内容类型校验:URL 过期时 CDN 常返回 XML/HTML 错误页,
-        // 若当音频喂给解码器会报 "PTS is not defined" 导致播放中断
-        const ctype = upstream.headers.get('content-type') ?? ''
-        if (!/audio|octet-stream|mpeg|flac|mp3|m4a|aac|ogg|wav/i.test(ctype)) {
-          try { await upstream.body.cancel() } catch { /* ignore */ }
-          throw new Error('upstream not audio: ' + ctype.slice(0, 40))
-        }
-        if (!headersWritten) {
-          const h: Record<string, string> = {
-            'Content-Type': upstream.headers.get('content-type') ?? 'audio/mpeg',
-            'Accept-Ranges': 'bytes',
-            'Access-Control-Allow-Origin': '*'
+    try {
+      for (let attempt = 1; attempt <= this.options.maxAttempts; attempt++) {
+        const controller = new AbortController()
+        const cancelUpstream = () => controller.abort(abortReason(client.signal))
+        client.signal.addEventListener('abort', cancelUpstream, { once: true })
+        let upstream: Response | undefined
+        let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+        try {
+          client.signal.throwIfAborted()
+          const headers: Record<string, string> = {
+            'User-Agent': UA, Referer: refererFor(url), Accept: '*/*', 'Accept-Encoding': 'identity'
           }
-          if (attempt === 1) {
-            // 首次请求:如实透传上游的长度/范围信息
-            const cr = upstream.headers.get('content-range')
-            const cl = upstream.headers.get('content-length')
-            if (cr) h['Content-Range'] = cr
-            if (cl) h['Content-Length'] = cl
-            res.writeHead(upstream.status, h)
-          } else {
-            // 续传重连:已发送 sent 字节,长度声明不再成立 → 分块传输(避免播放器长度错位)
-            res.writeHead(upstream.status === 206 ? 200 : upstream.status, h)
+          if (headersWritten) headers.Range = 'bytes=' + (baseOffset + sent) + '-' + (responseEnd ?? '')
+          else if (clientRange) headers.Range = clientRange
+          // This deadline covers response headers only. A whole-body timeout cuts every long song.
+          const headerTimer = setTimeout(() => controller.abort(new Error('upstream headers timed out')), this.options.headerTimeoutMs)
+          try { upstream = await fetch(url, { headers, redirect: 'follow', signal: controller.signal }) }
+          finally { clearTimeout(headerTimer) }
+          if (upstream.status === 416 && !headersWritten) {
+            const rangeHeader = upstream.headers.get('content-range')
+            res.writeHead(416, rangeHeader ? { 'Content-Range': rangeHeader } : {}); res.end(); return
           }
-          headersWritten = true
-        }
-        // 续传起点校验:错位会让音频流 PTS 断裂(FFmpeg "PTS is not defined")
-        let skip = 0
-        if (sent > 0) {
-          if (upstream.status === 200) {
-            skip = sent // 上游忽略 Range 返回整段:跳过已发送字节
-          } else {
-            const cr = upstream.headers.get('content-range') ?? ''
-            const m = cr.match(/bytes\s+(\d+)-/)
-            const start = m ? parseInt(m[1], 10) : null
-            if (start === null || start !== sent) {
-              // 起点不可信:断流交给播放器自愈(断点续播),避免错位损坏时间轴
-              try { await upstream.body.cancel() } catch { /* ignore */ }
-              throw new Error('range mismatch: got ' + (start ?? 'none') + ' want ' + sent)
+          if (upstream.status !== 200 && upstream.status !== 206) throw new Error('upstream status ' + upstream.status)
+          if (!upstream.body) throw new Error('upstream no body')
+          const ctype = upstream.headers.get('content-type') ?? ''
+          if (!/audio|octet-stream|mpeg|flac|mp3|m4a|aac|ogg|wav/i.test(ctype)) throw new Error('upstream not audio: ' + ctype.slice(0, 40))
+          const contentRange = upstream.status === 206 ? parseContentRange(upstream.headers.get('content-range')) : null
+          if (upstream.status === 206 && !contentRange) throw new Error('invalid upstream content-range')
+          const rawLength = upstream.headers.get('content-length')
+          const contentLength = rawLength !== null && /^\d+$/.test(rawLength) && Number.isSafeInteger(Number(rawLength)) ? Number(rawLength) : undefined
+          let skip = 0
+          if (!headersWritten) {
+            if (contentRange) {
+              const wantedStart = requestedRange?.start ?? (requestedRange?.suffix !== undefined && contentRange.total !== undefined
+                ? Math.max(0, contentRange.total - requestedRange.suffix) : contentRange.start)
+              if (contentRange.start !== wantedStart || (!requestedRange && contentRange.start !== 0)) throw new Error('upstream range starts at wrong offset')
+              if (requestedRange?.end !== undefined && contentRange.end > requestedRange.end) throw new Error('upstream range exceeds request')
+              if (contentLength !== undefined && contentLength !== contentRange.end - contentRange.start + 1) throw new Error('upstream range length mismatch')
+              baseOffset = contentRange.start
+              responseEnd = contentRange.end
+              totalSize = contentRange.total
+              expectedBytes = contentRange.end - contentRange.start + 1
+            } else {
+              // A server may ignore the initial Range and return the entire file as HTTP 200.
+              baseOffset = 0
+              expectedBytes = contentLength
+              responseEnd = contentLength !== undefined ? contentLength - 1 : undefined
+              totalSize = contentLength
             }
+            const h: Record<string, string> = { 'Content-Type': ctype, 'Accept-Ranges': 'bytes', 'Access-Control-Allow-Origin': '*' }
+            if (contentRange) h['Content-Range'] = 'bytes ' + contentRange.start + '-' + contentRange.end + '/' + (contentRange.total ?? '*')
+            if (expectedBytes !== undefined) h['Content-Length'] = String(expectedBytes)
+            res.writeHead(upstream.status, h)
+            headersWritten = true
+          } else if (contentRange) {
+            const wanted = baseOffset + sent
+            if (contentRange.start !== wanted || (totalSize !== undefined && contentRange.total !== undefined && totalSize !== contentRange.total)) {
+              throw new Error('range mismatch: got ' + contentRange.start + ' want ' + wanted)
+            }
+          } else {
+            // A retry ignored Range. Skip the absolute file offset, including the client's seek.
+            skip = baseOffset + sent
           }
+          if (req.method === 'HEAD' || expectedBytes === 0) { res.end(); return }
+          reader = upstream.body.getReader()
+          for (;;) {
+            client.signal.throwIfAborted()
+            const stallTimer = setTimeout(() => controller.abort(new Error('upstream stalled')), this.options.stallTimeoutMs)
+            let chunk: ReadableStreamReadResult<Uint8Array>
+            try { chunk = await reader.read() }
+            finally { clearTimeout(stallTimer) }
+            controller.signal.throwIfAborted()
+            if (chunk.done) {
+              if (skip > 0 || (expectedBytes !== undefined && sent < expectedBytes)) throw new Error('upstream ended before the requested bytes arrived')
+              res.end(); return
+            }
+            let value = chunk.value
+            if (skip > 0) {
+              const skipped = Math.min(skip, value.length)
+              value = value.subarray(skipped)
+              skip -= skipped
+            }
+            if (expectedBytes !== undefined) value = value.subarray(0, Math.max(0, expectedBytes - sent))
+            if (value.length) {
+              sent += value.length
+              if (!res.write(Buffer.from(value))) await waitForDrain(res, client.signal)
+            }
+            if (expectedBytes !== undefined && sent >= expectedBytes) { res.end(); return }
+          }
+        } catch (e) {
+          if (client.signal.aborted || res.writableEnded || res.destroyed) return
+          consecutiveSameUrlFails++
+          console.log('[media] 上游中断,第' + attempt + '次重连: ' + String(e).slice(0, 80) + ' (已发送 ' + sent + ' 字节)')
+          if (attempt >= this.options.maxAttempts) {
+            if (!headersWritten) { res.writeHead(502); res.end() }
+            else res.destroy()
+            return
+          }
+        } finally {
+          client.signal.removeEventListener('abort', cancelUpstream)
+          controller.abort()
+          try { if (reader) await reader.cancel(); else await upstream?.body?.cancel() } catch { /* already closed */ }
+          finally { try { reader?.releaseLock() } catch { /* already released */ } }
         }
-        const reader = (upstream.body as ReadableStream<Uint8Array>).getReader()
-        for (;;) {
-          const stalled = Symbol('stalled')
-          const chunk = await Promise.race([
-            reader.read(),
-            sleep(STALL_MS).then(() => stalled)
-          ])
-          if (chunk === stalled) {
-            try { await reader.cancel() } catch { /* ignore */ }
-            throw new Error('upstream stalled ' + STALL_MS + 'ms')
-          }
-          const { done, value } = chunk as ReadableStreamReadResult<Uint8Array>
-          if (done) break
-          if (!value?.length) continue
-          if (skip > 0) {
-            if (value.length <= skip) { skip -= value.length; continue }
-            const part = value.subarray(skip)
-            skip = 0
-            if (!res.write(Buffer.from(part))) await new Promise<void>(r => res.once('drain', () => r()))
-            sent += part.length
-            continue
-          }
-          if (!res.write(Buffer.from(value))) await new Promise<void>(r => res.once('drain', () => r()))
-          sent += value.length
-        }
-        res.end()
-        return
-      } catch (e) {
-        if (res.writableEnded || res.destroyed) return
-        consecutiveSameUrlFails++
-        console.log('[media] 上游中断,第' + attempt + '次重连: ' + String(e).slice(0, 80) + ' (已发送 ' + sent + ' 字节)')
-        if (attempt >= MAX_ATTEMPTS) { try { res.destroy() } catch { /* ignore */ } return }
-        // 同址连续失败 ≥2 次:重新解析换新地址(免费源链接有时效)
+        // Same-url failures may request a fresh address; cancellation must not wait for parsing.
         if (consecutiveSameUrlFails >= 2 && ctx.songJson && this.freshUrlProvider) {
           try {
-            const fresh = await this.freshUrlProvider(ctx.songJson, ctx.quality ?? '320k', ctx.pinned ?? null)
-            if (fresh && fresh !== url) { url = fresh; consecutiveSameUrlFails = 0; console.log('[media] 已换新解析地址续传') }
-          } catch { /* 保持原地址重试 */ }
+            const fresh = await abortable(this.freshUrlProvider(ctx.songJson, ctx.quality ?? '320k', ctx.pinned ?? null), client.signal)
+            if (fresh && fresh !== url) {
+              // A new parser URL may be another platform, codec, or bitrate. Byte offsets are
+              // not interchangeable; let the renderer reopen at the saved playback time.
+              if (headersWritten) { res.destroy(); return }
+              url = fresh
+              consecutiveSameUrlFails = 0
+            }
+          } catch { if (client.signal.aborted) return }
         }
-        await sleep(300 * attempt)
+        await sleep(this.options.retryDelayMs * attempt, client.signal)
       }
+    } finally {
+      client.abort()
+      this.clients.delete(client)
+      req.removeListener('aborted', onClose)
+      res.removeListener('close', onClose)
     }
   }
 
-  stop(): void { this.server?.close() }
+  stop(): void {
+    for (const client of this.clients) client.abort(new Error('media server stopped'))
+    this.server?.close()
+    this.server?.closeAllConnections()
+    this.server = null
+  }
 }

@@ -3,6 +3,8 @@ import { GdProvider } from './gdapi'
 import { HttpGenericProvider, HttpSourceConfig } from './http-generic'
 import { LxSourceManager } from './lx-runner/manager'
 import { MusicFreeManager } from './musicfree/manager'
+import { RequestCache } from './requestCache'
+import { lyricHasTimeline } from '../../../shared/lrc'
 
 export class ResolveError extends Error {
   constructor(msg: string, public code: 'all-failed' | 'manual-blocked' = 'all-failed') { super(msg) }
@@ -72,10 +74,8 @@ export class SourceRegistry {
   gd = new GdProvider()
   providers: SourceProvider[] = []
   mode: 'auto' | 'manual' = 'auto'
-  private picCache = new Map<string, string>()
-  private mergedSongs = new Map<string, Song>()
-  private lastKeyword = ''
-  private lastPage = 0
+  private picCache = new RequestCache<string | undefined>()
+  private lyricCache = new RequestCache<string | undefined>()
 
   constructor(public lx: LxSourceManager, public mf?: MusicFreeManager) {}
 
@@ -101,6 +101,8 @@ export class SourceRegistry {
       return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib)
     })
     this.providers = list
+    this.picCache.clear()
+    this.lyricCache.clear()
   }
 
   snapshot() {
@@ -111,22 +113,14 @@ export class SourceRegistry {
    * 聚合分页搜索：
    * - GD（wy/kw）：count=75 × pages=N
    * - MusicFree 插件（kw/kg/tx/wy...）：各平台官方接口原生翻页
-   * 合并去重累计（same keyword 翻页增量追加）
+   * 每次只合并本页，由调用方累计分页，推荐搜索不会污染搜索页。
    */
   async search(keyword: string, page = 1): Promise<SearchPage> {
     const searchers = this.providers.filter(p => p.search && p.health.status !== 'disabled')
-    const lists = await Promise.all(searchers.map(p => p.search!(keyword, page).catch(() => [] as Song[])))
-
-    // 关键词变了 → 清空累计缓存
-    if (this.lastKeyword !== keyword || page <= this.lastPage) {
-      this.mergedSongs.clear()
-      this.lastKeyword = keyword
-      this.lastPage = 0
-    }
-    mergeSongs(this.mergedSongs, lists.flat())
-    this.lastPage = Math.max(this.lastPage, page)
-
-    const songs = [...this.mergedSongs.values()]
+    const lists = await Promise.all(searchers.map(p => withTimeout(p.search!(keyword, page), 12000).catch(() => [] as Song[])))
+    const mergedSongs = new Map<string, Song>()
+    mergeSongs(mergedSongs, lists.flat())
+    const songs = [...mergedSongs.values()]
     const totalThisPage = lists.reduce((n, l) => n + l.length, 0)
     // hasMore：本页任一源还有数据（GD 75/页满页视为还有；插件 isEnd 信息在 provider 内部已消化——返回条数>0 即可能还有）
     const hasMore = totalThisPage >= 20
@@ -192,27 +186,35 @@ export class SourceRegistry {
   }
 
   async getPic(song: Song): Promise<string | undefined> {
-    const cached = this.picCache.get(song.key)
-    if (cached) return cached
+    if (song.picUrl) return song.picUrl
+    return this.picCache.get(song.key, () => this.loadPic(song))
+  }
+
+  private async loadPic(song: Song): Promise<string | undefined> {
     for (const o of song.origins) {
-      const p = this.providers.find(x => x.getPic && x.caps.platforms.includes(o.platform as any) && x.health.status !== 'disabled')
-      if (!p?.getPic) continue
-      try {
-        const url = await withTimeout(p.getPic(o), 8000)
-        if (url) { this.picCache.set(song.key, url); return url }
-      } catch { /* next */ }
+      for (const p of this.providers) {
+        if (!p.getPic || !p.caps.platforms.includes(o.platform as any) || p.health.status === 'disabled') continue
+        try {
+          const url = await withTimeout(p.getPic(o), 8000)
+          if (url) return url
+        } catch { /* next */ }
+      }
     }
     return undefined
   }
 
   async getLyric(song: Song): Promise<string | undefined> {
+    return this.lyricCache.get(song.key, () => this.loadLyric(song))
+  }
+
+  private async loadLyric(song: Song): Promise<string | undefined> {
     // 同一平台的所有 provider 依次尝试(lx 源多无歌词能力,须轮到 GD/HTTP 等)
     for (const o of song.origins) {
       for (const p of this.providers) {
         if (!p.getLyric || !p.caps.platforms.includes(o.platform as any) || p.health.status === 'disabled') continue
         try {
           const lrc = await withTimeout(p.getLyric(o), 8000)
-          if (lrc && this.lyricMatchesSong(lrc, song) && this.lyricHasTimeline(lrc)) return lrc
+          if (lrc && this.lyricMatchesSong(lrc, song) && lyricHasTimeline(lrc)) return lrc
         } catch { /* next */ }
       }
     }
@@ -225,7 +227,7 @@ export class SourceRegistry {
         const o = hit?.origins[0]
         if (o) {
           const lrc = await withTimeout(gd.getLyric(o), 8000)
-          if (lrc && this.lyricMatchesSong(lrc, song) && this.lyricHasTimeline(lrc)) return lrc
+          if (lrc && this.lyricMatchesSong(lrc, song) && lyricHasTimeline(lrc)) return lrc
         }
       }
     } catch { /* ignore */ }
@@ -240,12 +242,4 @@ export class SourceRegistry {
     return !/现场|演唱会|\blive\b/i.test(head)
   }
 
-  /** 至少两条带时间戳的行,否则视为占位/空歌词 */
-  private lyricHasTimeline(raw: string): boolean {
-    let n = 0
-    for (const line of raw.split('\n')) {
-      if (/\[[0-9]{1,3}:[0-9]{1,2}/.test(line) && ++n >= 2) return true
-    }
-    return false
-  }
 }

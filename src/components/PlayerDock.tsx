@@ -1,23 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Play, Pause, SkipBack, SkipForward, Download, Loader2, Pin, PinOff, ListMusic, Volume2, Repeat, Repeat1, Shuffle, AudioLines, MoonStar, Maximize2, Captions, Plus } from 'lucide-react'
 import { useStore, getAudio } from '../stores/store'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SourceBadge } from './SourceBadge'
 import { AddToPlaylistDialog } from './SongTable'
 import { LyricPanel } from './LyricPanel'
+import { PlaybackProgress } from './PlaybackProgress'
+import { useLimbusVisible } from '../hooks/useLimbusVisible'
 
 const QUALITIES = [
   { id: '320k', label: '320K', tip: '320k 极品' },
   { id: '128k', label: '128K', tip: '128k 标准' },
   { id: 'flac', label: 'SQ', tip: 'FLAC 无损' }
 ] as const
-
-function fmt(sec: number): string {
-  if (!isFinite(sec) || sec < 0) return '0:00'
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return m + ':' + String(s).padStart(2, '0')
-}
 
 export function PlayerDock(): JSX.Element | null {
   const current = useStore(s => s.current)
@@ -39,21 +34,14 @@ export function PlayerDock(): JSX.Element | null {
   const sleepTimerAt = useStore(s => s.sleepTimerAt)
   const setSleepTimer = useStore(s => s.setSleepTimer)
   const setFullPlayer = useStore(s => s.setFullPlayer)
-  const [limbusOn, setLimbusOn] = useState(false)
-
-  useEffect(() => {
-    const off = window.glass.onLimbusState(v => setLimbusOn(v))
-    return off
-  }, [])
+  const limbusOn = useLimbusVisible()
   const manualBlocked = useStore(s => s.manualBlocked)
   const clearManualBlocked = useStore(s => s.clearManualBlocked)
   const showToast = useStore(s => s.showToast)
 
-  const [time, setTime] = useState(0)
-  const [dur, setDur] = useState(0)
-  const [bufRatio, setBufRatio] = useState(0)
   const [volume, setVolume] = useState(() => {
-    const v = Number(localStorage.getItem('lisn-volume'))
+    const saved = localStorage.getItem('lisn-volume')
+    const v = saved === null ? 0.85 : Number(saved)
     return isNaN(v) ? 0.85 : Math.min(Math.max(v, 0), 1)
   })
   const [showQuality, setShowQuality] = useState(false)
@@ -62,28 +50,6 @@ export function PlayerDock(): JSX.Element | null {
   const [plSong, setPlSong] = useState<import('../types').Song | null>(null)
   const [showLyric, setShowLyric] = useState(false)
   const [showSleep, setShowSleep] = useState(false)
-  const barRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const audio = getAudio()
-    const onTime = () => setTime(audio.currentTime)
-    const onMeta = () => setDur(audio.duration)
-    const onProg = () => {
-      try {
-        if (audio.duration && audio.buffered.length) {
-          setBufRatio(audio.buffered.end(audio.buffered.length - 1) / audio.duration)
-        }
-      } catch { /* ignore */ }
-    }
-    audio.addEventListener('timeupdate', onTime)
-    audio.addEventListener('loadedmetadata', onMeta)
-    audio.addEventListener('progress', onProg)
-    return () => {
-      audio.removeEventListener('timeupdate', onTime)
-      audio.removeEventListener('loadedmetadata', onMeta)
-      audio.removeEventListener('progress', onProg)
-    }
-  }, [])
 
   useEffect(() => {
     getAudio().volume = volume
@@ -91,16 +57,6 @@ export function PlayerDock(): JSX.Element | null {
   }, [volume])
 
   if (!current && !loading) return <div style={{ height: 'var(--dock-h)' }} />
-
-  const audio = getAudio()
-
-  const seek = (e: React.MouseEvent) => {
-    if (!barRef.current || !dur) return
-    const rect = barRef.current.getBoundingClientRect()
-    const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1)
-    audio.currentTime = ratio * dur
-    setTime(ratio * dur)
-  }
 
   const doDownload = async () => {
     if (!current) return
@@ -150,23 +106,14 @@ export function PlayerDock(): JSX.Element | null {
           </button>
           <button className="ctrl-btn" onClick={playPrev} title="上一首"><SkipBack size={19} /></button>
           <button className="play-btn" onClick={() => {
-            if (loading) return
-            const st = useStore.getState()
-            if (!playing && !audio.src && st.current) { void st.play(st.current, st.queue); return }
+            if (loading) { useStore.getState().pause(); return }
             void useStore.getState().togglePlay()
           }}>
             {loading ? <Loader2 size={19} className="spin" /> : playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
           </button>
           <button className="ctrl-btn" onClick={playNext} title="下一首"><SkipForward size={19} /></button>
         </div>
-        <div className="progress-row">
-          <span className="time">{fmt(time)}</span>
-          <div className="progress" ref={barRef} onClick={seek}>
-            <div className="buf" style={{ ['--buf' as any]: Math.min(bufRatio * 100, 100) + '%' }} />
-            <div className="fill" style={{ ['--fill' as any]: (dur ? (time / dur) * 100 : 0) + '%' }} />
-          </div>
-          <span className="time right">{fmt(dur)}</span>
-        </div>
+        <PlaybackProgress />
       </div>
 
       {/* 右：音量 / 音质 / 锁定源 / 下载 / 队列 */}
@@ -295,7 +242,7 @@ export function PlayerDock(): JSX.Element | null {
         <button
           className={'icon-btn' + (limbusOn ? ' on' : '')}
           title="桌面歌词(Limbus 演出悬浮窗)"
-          onClick={async () => { const visible = await window.glass.limbusToggle(); setLimbusOn(!!visible) }}
+          onClick={() => { void window.glass.limbusToggle().catch(() => showToast('桌面歌词启动失败，请重试')) }}
         >
           <Captions size={17} />
         </button>

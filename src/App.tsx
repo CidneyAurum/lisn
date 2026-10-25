@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStore } from './stores/store'
 import { TitleBar } from './components/TitleBar'
@@ -13,7 +13,8 @@ import { LibraryView } from './views/LibraryView'
 import { SourceCenterView } from './views/SourceCenterView'
 import { SettingsView } from './views/SettingsView'
 import { getAudio } from './stores/store'
-import { parseLrc } from './utils/lrc'
+import { useSongLyrics } from './hooks/useSongLyrics'
+import { useLimbusVisible } from './hooks/useLimbusVisible'
 
 export function App(): JSX.Element {
   const view = useStore(s => s.view)
@@ -21,13 +22,12 @@ export function App(): JSX.Element {
   const current = useStore(s => s.current)
   const playing = useStore(s => s.playing)
   const fullPlayer = useStore(s => s.fullPlayer)
-  const [limbusOnLocal, setLimbusOnLocal] = useState(false)
+  const limbusOnLocal = useLimbusVisible()
+  const overlayLyrics = useSongLyrics(limbusOnLocal ? current : null)
+  const limbusConfig = useStore(s => (s.settings as any)?.limbus)
   const refreshSources = useStore(s => s.refreshSources)
   const refreshSettings = useStore(s => s.refreshSettings)
   const refreshDownloads = useStore(s => s.refreshDownloads)
-  const setPlaying = useStore(s => s.setPlaying)
-  const playNext = useStore(s => s.playNext)
-  const audioBound = useRef(false)
 
   useEffect(() => {
     void refreshSources()
@@ -35,7 +35,6 @@ export function App(): JSX.Element {
     void refreshDownloads()
     const offQueue = window.glass.onQueue(items => useStore.setState({ downloads: items }))
     const offTray = window.glass.onTrayControl(action => {
-      const audio = getAudio()
       const st = useStore.getState()
       if (action === 'toggle') void useStore.getState().togglePlay()
       else if (action === 'next') st.playNext()
@@ -47,31 +46,21 @@ export function App(): JSX.Element {
     return () => { offQueue(); offTray(); offSources(); offPl() }
   }, [refreshSources, refreshSettings, refreshDownloads])
 
-  // 全局 audio 事件绑定（单例）
-  useEffect(() => {
-    if (audioBound.current) return
-    audioBound.current = true
-    const audio = getAudio()
-    audio.addEventListener('play', () => setPlaying(true))
-    audio.addEventListener('pause', () => setPlaying(false))
-    audio.addEventListener('ended', () => playNext())
-    audio.addEventListener('error', () => { if (audio.src) setPlaying(false) })
-    // 恢复上次的音量
-    const saved = Number(localStorage.getItem('lisn-volume'))
-    if (!isNaN(saved) && saved >= 0 && saved <= 1) audio.volume = saved
-  }, [setPlaying, playNext])
-
   // 系统媒体会话(SMTC):媒体键 + 系统媒体浮层
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     const audio = getAudio()
     const ms = navigator.mediaSession
-    ms.setActionHandler('play', () => { void useStore.getState().togglePlay() })
-    ms.setActionHandler('pause', () => audio.pause())
+    ms.setActionHandler('play', () => { if (audio.paused && !useStore.getState().loading) void useStore.getState().togglePlay() })
+    ms.setActionHandler('pause', () => useStore.getState().pause())
     ms.setActionHandler('previoustrack', () => useStore.getState().playPrev())
     ms.setActionHandler('nexttrack', () => useStore.getState().playNext())
     ms.setActionHandler('seekto', (d) => { if (d.seekTime != null) audio.currentTime = d.seekTime })
-    return () => { try { ms.setActionHandler('play', null); ms.setActionHandler('pause', null) } catch { /* noop */ } }
+    return () => {
+      for (const action of ['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'] as const) {
+        try { ms.setActionHandler(action, null) } catch { /* unsupported action */ }
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -92,15 +81,9 @@ export function App(): JSX.Element {
   // 桌面歌词悬浮窗:歌词(换歌时)+ 播放进度(节流 60ms)推送到悬浮窗
   useEffect(() => {
     const pushLyrics = () => {
-      if (!current) return
-      window.glass.lyric(current).then(raw => {
-        // 无歌词也推送空集:清掉悬浮窗里上一首的残留歌词
-        window.glass.overlayPushLyrics({
-          lines: raw ? parseLrc(raw).map(l => ({ timeMs: l.timeMs, text: l.text })) : [],
-          title: current.name, artist: current.artist
-        })
-        window.glass.overlayPushPos(getAudio().currentTime)
-      }).catch(() => {})
+      if (!limbusOnLocal) return
+      window.glass.overlayPushLyrics({ lines: overlayLyrics, title: current?.name ?? '', artist: current?.artist ?? '' })
+      window.glass.overlayPushPos(getAudio().currentTime)
     }
     pushLyrics()
     const off = window.glass.onOverlayRepush(pushLyrics)
@@ -108,27 +91,27 @@ export function App(): JSX.Element {
       window.glass.overlaySetConfig(cfg)
     })
     return () => { off(); offCfg() }
-  }, [current])
+  }, [current?.key, current?.name, current?.artist, overlayLyrics, limbusOnLocal])
   useEffect(() => {
+    if (!limbusOnLocal) return
     const audio = getAudio()
     let last = 0
+    let lastPosition = -1
     const onTime = () => {
       // 无真实音源(解析失败/空闲)时不推送,避免 pos=0 持续覆盖
       if (!audio.src || !isFinite(audio.duration) || audio.duration <= 0) return
       const now = Date.now()
-      if (now - last > 60) { last = now; window.glass.overlayPushPos(audio.currentTime) }
+      if (now - last > 60 && audio.currentTime !== lastPosition) {
+        last = now; lastPosition = audio.currentTime; window.glass.overlayPushPos(audio.currentTime)
+      }
     }
     audio.addEventListener('timeupdate', onTime)
     const t = setInterval(onTime, 250) // 暂停时也保底推送
     return () => { audio.removeEventListener('timeupdate', onTime); clearInterval(t) }
-  }, [])
+  }, [limbusOnLocal])
   useEffect(() => {
-    const off = window.glass.onLimbusState(v => setLimbusOnLocal(v))
-    return off
-  }, [])
-  useEffect(() => {
-    if ((useStore.getState().settings as any)?.limbus) window.glass.overlaySetConfig((useStore.getState().settings as any).limbus)
-  }, [(useStore.getState().settings as any)?.limbus])
+    if (limbusConfig) window.glass.overlaySetConfig(limbusConfig)
+  }, [limbusConfig])
 
   // 任务栏/Alt+Tab 显示当前曲
   useEffect(() => {
@@ -145,7 +128,7 @@ export function App(): JSX.Element {
       const audio = getAudio()
       if (e.code === 'Space') {
         e.preventDefault()
-        audio.paused ? void audio.play().catch(() => {}) : audio.pause()
+        void useStore.getState().togglePlay()
       } else if (e.code === 'ArrowLeft') {
         audio.currentTime = Math.max(0, audio.currentTime - 5)
       } else if (e.code === 'ArrowRight') {
